@@ -1346,3 +1346,78 @@ domain_results_df
 
 
 # -----------------------------
+# VERY LOW VS VERY HIGH Secondary Domains-----------
+
+
+
+vlow_high_df <- final_df %>%
+  filter(
+    (condition_A == "VeryLowHz" & condition_B == "HighHz") |
+      (condition_A == "HighHz" & condition_B == "VeryLowHz")
+  ) %>% filter(!is.na(Secondary_Domain))
+
+
+table(vlow_high_df$condition_A, vlow_high_df$condition_B)
+
+nrow(vlow_high_df)
+
+length(unique(vlow_high_df$study_name))
+
+
+table(vlow_high_df$Secondary_Domain)
+
+
+# Identify domains with at least 2 effect sizes
+domain_counts <- table(vlow_high_df$Secondary_Domain)
+valid_domains <- names(domain_counts[domain_counts >= 2])
+
+# Create empty list to store results
+domain_results <- list()
+forest_plots <- list()
+
+for(d in valid_domains){
+  
+  df <- vlow_high_df %>% filter(Secondary_Domain == d)
+  
+  # Run multilevel meta-analysis
+  res <- rma.mv(
+    yi = yi,
+    V = vi,
+    random = ~1 | study_name,
+    method = "REML",
+    data = df
+  )
+  
+  # Store results
+  domain_results[[d]] <- tibble(
+    domain = d,
+    estimate = res$beta[1],
+    se = res$se,
+    ci.lb = res$ci.lb,
+    ci.ub = res$ci.ub,
+    pval = res$pval
+  )
+  
+  # Create forest plot
+  forest(res,
+         slab = paste(df$study_name, "-", df$`Cog Task`),
+         xlab = "Hedges' g (positive = better cognitive performance for [Very Low Hz])",
+         main = paste("\n Forest plot:", d),
+         annotate=TRUE, addfit=TRUE, 
+         showweights=TRUE, header=TRUE,
+         cex = 0.9,
+         col="white", border="firebrick",
+         colout="firebrick")
+  
+  
+  forest_plots[[d]] <- res
+}
+
+# Combine all results
+domain_results_df <- bind_rows(domain_results)
+domain_results_df
+
+
+
+
+# --------
