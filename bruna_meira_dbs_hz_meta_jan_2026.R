@@ -3229,3 +3229,42 @@ forest(
 
 
 # -----------------------------
+# LOW|VERY LOW vs HIGH Other (RVE, etc.) ------------
+
+library(metafor)
+library(clubSandwich)
+
+# Fit models
+naive <- rma(yi, vi, data = low_high_df)
+mlma <- rma.mv(yi, vi, random = ~ 1 | study_name, data = low_high_df)
+rve_result <- robust(naive, cluster = low_high_df$study_name)
+
+
+#df = low_high_df[low_high_df$cog_domain=="Verbal Fluency",]
+
+naive <- rma.mv(
+  yi = yi,
+  V = vi,
+  method = "REML",
+  data = low_high_df
+)
+
+mlma <- rma.mv(yi, vi, random = ~ 1 | study_name, data = low_high_df)
+rve_result <- robust(naive, cluster = low_high_df$study_name)
+
+
+
+
+# Compare
+comparison <- data.frame(
+  Method = c("Naive", "MLMA", "RVE"),
+  Coefficient = c(coef(naive), coef(mlma), coef(rve_result)),
+  SE = c(naive$se, sqrt(diag(vcov(mlma)))[1], rve_result$se),
+  CI_lower = c(naive$ci.lb, mlma$ci.lb, rve_result$ci.lb),
+  CI_upper = c(naive$ci.ub, mlma$ci.ub, rve_result$ci.ub),
+  p_value = c(naive$pval, mlma$pval, rve_result$pval)
+)
+
+print(comparison)
+
+# ---------
