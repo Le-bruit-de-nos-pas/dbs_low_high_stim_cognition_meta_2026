@@ -3634,3 +3634,90 @@ domain_results_df
 
 
 # -----------------------------
+# LOW|VERY LOW VS HIGH - Any Domain Across Main+Secondary+Terteary ----------
+
+final_df_new_flags_group_paulo_jan_17 <- fread("final_df_new_flags_group_paulo_jan_17.csv")
+
+
+low_high_df <- final_df_new_flags_group_paulo_jan_17 %>%
+  filter(
+    (condition_A == "VeryLowHz" & condition_B == "HighHz") |
+      (condition_A == "LowHz" & condition_B == "HighHz")
+  ) %>% select(study_name, study_id, effect_id, yi, vi, `Cog Task`, `Verbal Fluency`:`Attention`)
+
+low_high_df <- low_high_df %>% gather(key="Domain", value="ON", `Verbal Fluency`:`Attention`) %>%
+  drop_na() %>%
+  arrange(study_name, study_id, effect_id, Domain) %>% select(-ON)
+
+
+length(unique(low_high_df$study_id))
+length(unique(low_high_df$study_name))
+
+
+table(low_high_df$Domain)
+
+
+
+
+# Identify domains with at least 2 effect sizes
+domain_counts <- table(low_high_df$Domain)
+valid_domains <- names(domain_counts[domain_counts >= 2])
+
+# Create empty list to store results
+domain_results <- list()
+forest_plots <- list()
+
+for(d in valid_domains){
+  
+  df <- low_high_df %>% filter(Domain == d)
+  
+  # Run multilevel meta-analysis
+  res <- rma.mv(
+    yi = yi,
+    V = vi,
+    random = ~1 | study_name,
+    method = "REML",
+    data = df
+  )
+  
+  # Store results
+  domain_results[[d]] <- tibble(
+    domain = d,
+    estimate = res$beta[1],
+    se = res$se,
+    ci.lb = res$ci.lb,
+    ci.ub = res$ci.ub,
+    pval = res$pval
+  )
+  
+  # Create forest plot
+  forest(res,
+         slab = paste(df$study_name, "-", df$`Cog Task`),
+         xlab = "Hedges' g (positive = better cognitive performance for [Low|Very Low Hz])",
+         main = paste("\n Forest plot:", d),
+         annotate=TRUE, addfit=TRUE, 
+         showweights=TRUE, header=TRUE,
+         cex = 0.9,
+         col="white", border="firebrick",
+         colout="firebrick")
+  
+  forest_plots[[d]] <- res
+}
+
+# Combine all results
+domain_results_df <- bind_rows(domain_results)
+domain_results_df
+
+
+450
+700
+400
+650
+650
+700
+800
+
+
+
+
+# -----------
