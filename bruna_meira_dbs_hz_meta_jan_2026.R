@@ -1497,3 +1497,902 @@ domain_results_df <- bind_rows(domain_results)
 domain_results_df
 
 # -----------
+
+# Radial plots summary horizontal -------
+
+library(dplyr)
+library(ggplot2)
+library(stringr)
+
+# LOW VS HIGH - PRIMARY DOMAINS - NAIVE
+
+plot_df_low_primary_naive <- tibble(
+  domain = c(
+    "Executive Control (naïve)","Verbal Fluency (naïve)","Working Memory (naïve)"  ),
+  g = c(-0.01, 0.25, -0.22),
+  ci_low=c(-0.28,0.11,-0.61),
+  ci_high=c(0.26,0.39,0.18),
+  sig = c(FALSE, TRUE, FALSE)
+)
+
+
+
+
+plot_df2 <- plot_df_low_primary_naive %>%
+ # arrange(g) %>%
+  mutate(
+    domain_wrapped = str_wrap(domain, 20),
+    Direction = ifelse(g >= 0, "Positive [Better Low Hz]", "Negative [Better High Hz]")  )
+
+
+plt <- ggplot(plot_df2) +
+    # Light reference grid (excluding zero)
+  geom_hline(
+    aes(yintercept = y),
+    data = data.frame(y = seq(-0.8, 0.6, 0.1)[seq(-0.8, 0.6, 0.1) != 0]),
+    color = "lightgrey",
+    linewidth = 0.4
+  ) +
+  
+  # Emphasized zero line
+  geom_hline(
+    yintercept = 0,
+    color = "gray12",
+    linewidth = 1.2
+  ) +
+  geom_col(
+    aes(
+      x = domain_wrapped,
+      y = g,
+      fill = Direction, alpha=0.85    ),
+    width = 0.9,
+    color = "gray20",
+    show.legend = TRUE
+  )  
+
+
+plt <- plt +
+  scale_y_continuous(
+    limits = c(-0.8, 0.6),
+    breaks = seq(-0.8, 0.6, 0.1),
+    expand = c(0, 0)
+  ) +
+  scale_fill_manual(
+    values = c(
+      "Positive [Better Low Hz]" = "#0c3647",
+      "Negative [Better High Hz]" = "#a82258"
+    )
+  ) +
+  scale_colour_manual(
+    values = c(
+      "Positive [Better Low Hz]" = "#0c3647",
+      "Negative [Better High Hz]" = "#a82258"
+    )
+  ) +
+  scale_alpha_identity() +
+  theme_minimal(base_size = 12) +
+  theme(
+    axis.title.x = element_blank(),
+    #axis.text.y = element_blank(),
+    axis.ticks = element_blank(),
+    axis.text.x = element_text(size = 9, color = "gray12", angle = 45, hjust = 1),
+    panel.grid = element_blank(),
+    legend.position = "right"
+  )
+
+
+plt <- plt + geom_text(aes(x = domain_wrapped,
+                    y = g + ifelse(g > 0, 0.1, -0.1), label = sprintf("%.2f", g)),
+    size = 3.5, color = "gray12")
+
+
+plt <- plt +
+  geom_segment(
+    data = plot_df2,
+    aes(
+      x = domain_wrapped,
+      xend = domain_wrapped,
+      y = ci_low,
+      yend = ci_high
+    ),
+    linewidth = 2.9,
+    color = "gray",alpha=0.4,
+    lineend = "round",
+    inherit.aes = TRUE
+  )
+
+plt
+
+
+ggsave(file="plt_low_prim_naive.svg", plot=plt, width=5, height=5)
+
+
+
+# LOW VS HIGH - PRIMARY DOMAINS - MLMA
+
+plot_df_low_primary_mlma <- tibble(
+  domain = c(
+    "Executive Control (MLMA)","Verbal Fluency (MLMA)","Working Memory (MLMA)"
+  ),
+  g = c(0.00, 0.23, -0.22),
+  ci_low=c(-0.20,0.02,-0.61),
+  ci_high=c(0.19,0.44,0.18),
+  sig = c(FALSE, TRUE, FALSE)
+)
+
+
+
+
+plot_df2 <- plot_df_low_primary_mlma %>%
+ # arrange(g) %>%
+  mutate(
+    domain_wrapped = str_wrap(domain, 20),
+    Direction = ifelse(g >= 0, "Positive [Better Low Hz]", "Negative [Better High Hz]")  )
+
+
+plt <- ggplot(plot_df2) +
+    # Light reference grid (excluding zero)
+  geom_hline(
+    aes(yintercept = y),
+    data = data.frame(y = seq(-0.8, 0.6, 0.1)[seq(-0.8, 0.6, 0.1) != 0]),
+    color = "lightgrey",
+    linewidth = 0.4
+  ) +
+  
+  # Emphasized zero line
+  geom_hline(
+    yintercept = 0,
+    color = "gray12",
+    linewidth = 1.2
+  ) +
+  geom_col(
+    aes(
+      x = domain_wrapped,
+      y = g,
+      fill = Direction, alpha=0.85    ),
+    width = 0.9,
+    color = "gray20",
+    show.legend = TRUE
+  )  
+
+
+plt <- plt +
+  scale_y_continuous(
+    limits = c(-0.8, 0.6),
+    breaks = seq(-0.8, 0.6, 0.1),
+    expand = c(0, 0)
+  ) +
+  scale_fill_manual(
+    values = c(
+      "Positive [Better Low Hz]" = "#0c3647",
+      "Negative [Better High Hz]" = "#a82258"
+    )
+  ) +
+  scale_colour_manual(
+    values = c(
+      "Positive [Better Low Hz]" = "#0c3647",
+      "Negative [Better High Hz]" = "#a82258"
+    )
+  ) +
+  scale_alpha_identity() +
+  theme_minimal(base_size = 12) +
+  theme(
+    axis.title.x = element_blank(),
+    #axis.text.y = element_blank(),
+    axis.ticks = element_blank(),
+        axis.text.x = element_text(size = 9, color = "gray12", angle = 45, hjust = 1),
+    panel.grid = element_blank(),
+    legend.position = "right"
+
+  )
+
+
+plt <- plt + geom_text(aes(x = domain_wrapped,
+                    y = g + ifelse(g > 0, 0.1, -0.1), label = sprintf("%.2f", g)),
+    size = 3.5, color = "gray12")
+
+
+plt <- plt +
+  geom_segment(
+    data = plot_df2,
+    aes(
+      x = domain_wrapped,
+      xend = domain_wrapped,
+      y = ci_low,
+      yend = ci_high
+    ),
+    linewidth = 2.9,
+    color = "gray",alpha=0.4,
+    lineend = "round",
+    inherit.aes = TRUE
+  )
+
+plt
+
+
+ggsave(file="plt_low_prim_mlma.svg", plot=plt, width=5, height=5)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+plot_df_low_secondary_naive <- tibble(
+  domain = c("Top-down Attention (naïve)","Cognitive Flexibility (naïve)"  ),
+  g = c(-0.01, 0.25),
+  ci_low=c(-0.28, 0.11),
+  ci_high=c(0.26, 0.39),
+  sig = c(FALSE, TRUE)
+)
+
+
+
+
+
+plot_df2 <- plot_df_low_secondary_naive %>%
+ # arrange(g) %>%
+  mutate(
+    domain_wrapped = str_wrap(domain, 20),
+    Direction = ifelse(g >= 0, "Positive [Better Low Hz]", "Negative [Better High Hz]")  )
+
+
+plt <- ggplot(plot_df2) +
+    # Light reference grid (excluding zero)
+  geom_hline(
+    aes(yintercept = y),
+    data = data.frame(y = seq(-0.8, 0.6, 0.1)[seq(-0.8, 0.6, 0.1) != 0]),
+    color = "lightgrey",
+    linewidth = 0.4
+  ) +
+  
+  # Emphasized zero line
+  geom_hline(
+    yintercept = 0,
+    color = "gray12",
+    linewidth = 1.2
+  ) +
+  geom_col(
+    aes(
+      x = domain_wrapped,
+      y = g,
+      fill = Direction, alpha=0.85    ),
+    width = 0.9,
+    color = "gray20",
+    show.legend = TRUE
+  )  
+
+
+plt <- plt +
+  scale_y_continuous(
+    limits = c(-0.8, 0.6),
+    breaks = seq(-0.8, 0.6, 0.1),
+    expand = c(0, 0)
+  ) +
+  scale_fill_manual(
+    values = c(
+      "Positive [Better Low Hz]" = "#0c3647",
+      "Negative [Better High Hz]" = "#a82258"
+    )
+  ) +
+  scale_colour_manual(
+    values = c(
+      "Positive [Better Low Hz]" = "#0c3647",
+      "Negative [Better High Hz]" = "#a82258"
+    )
+  ) +
+  scale_alpha_identity() +
+  theme_minimal(base_size = 12) +
+  theme(
+    axis.title.x = element_blank(),
+    #axis.text.y = element_blank(),
+    axis.ticks = element_blank(),
+        axis.text.x = element_text(size = 9, color = "gray12", angle = 45, hjust = 1),
+    panel.grid = element_blank(),
+    legend.position = "right"
+
+  )
+
+
+plt <- plt + geom_text(aes(x = domain_wrapped,
+                    y = g + ifelse(g > 0, 0.1, -0.1), label = sprintf("%.2f", g)),
+    size = 3.5, color = "gray12")
+
+
+plt <- plt +
+  geom_segment(
+    data = plot_df2,
+    aes(
+      x = domain_wrapped,
+      xend = domain_wrapped,
+      y = ci_low,
+      yend = ci_high
+    ),
+    linewidth = 2.9,
+    color = "gray",alpha=0.4,
+    lineend = "round",
+    inherit.aes = TRUE
+  )
+
+plt
+
+
+ggsave(file="plt_low_sec_naive.svg", plot=plt, width=4, height=5)
+
+
+
+
+
+
+
+plot_df_low_secondary_mlma <- tibble(
+  domain = c( "Top-down Attention (MLMA)","Cognitive Flexibility (MLMA)"),
+  g = c(-0.00, 0.23),
+  ci_low=c(-0.2,0.02),
+  ci_high=c(0.19, 0.44),
+  sig = c( FALSE, TRUE)
+)
+
+
+
+
+plot_df2 <- plot_df_low_secondary_mlma %>%
+ # arrange(g) %>%
+  mutate(
+    domain_wrapped = str_wrap(domain, 20),
+    Direction = ifelse(g >= 0, "Positive [Better Low Hz]", "Negative [Better High Hz]")  )
+
+
+plt <- ggplot(plot_df2) +
+    # Light reference grid (excluding zero)
+  geom_hline(
+    aes(yintercept = y),
+    data = data.frame(y = seq(-0.8, 0.6, 0.1)[seq(-0.8, 0.6, 0.1) != 0]),
+    color = "lightgrey",
+    linewidth = 0.4
+  ) +
+  
+  # Emphasized zero line
+  geom_hline(
+    yintercept = 0,
+    color = "gray12",
+    linewidth = 1.2
+  ) +
+  geom_col(
+    aes(
+      x = domain_wrapped,
+      y = g,
+      fill = Direction, alpha=0.85    ),
+    width = 0.9,
+    color = "gray20",
+    show.legend = TRUE
+  )  
+
+
+plt <- plt +
+  scale_y_continuous(
+    limits = c(-0.8, 0.6),
+    breaks = seq(-0.8, 0.6, 0.1),
+    expand = c(0, 0)
+  ) +
+  scale_fill_manual(
+    values = c(
+      "Positive [Better Low Hz]" = "#0c3647",
+      "Negative [Better High Hz]" = "#a82258"
+    )
+  ) +
+  scale_colour_manual(
+    values = c(
+      "Positive [Better Low Hz]" = "#0c3647",
+      "Negative [Better High Hz]" = "#a82258"
+    )
+  ) +
+  scale_alpha_identity() +
+  theme_minimal(base_size = 12) +
+  theme(
+    axis.title.x = element_blank(),
+    #axis.text.y = element_blank(),
+    axis.ticks = element_blank(),
+        axis.text.x = element_text(size = 9, color = "gray12", angle = 45, hjust = 1),
+    panel.grid = element_blank(),
+    legend.position = "right"
+
+  )
+
+
+plt <- plt + geom_text(aes(x = domain_wrapped,
+                    y = g + ifelse(g > 0, 0.1, -0.1), label = sprintf("%.2f", g)),
+    size = 3.5, color = "gray12")
+
+
+plt <- plt +
+  geom_segment(
+    data = plot_df2,
+    aes(
+      x = domain_wrapped,
+      xend = domain_wrapped,
+      y = ci_low,
+      yend = ci_high
+    ),
+    linewidth = 2.9,
+    color = "gray",alpha=0.4,
+    lineend = "round",
+    inherit.aes = TRUE
+  )
+
+plt
+
+
+ggsave(file="plt_low_sec_mlma.svg", plot=plt, width=4, height=5)
+
+
+
+
+
+
+
+
+
+
+
+
+plot_df_vlow_primary_naive <- tibble(
+  domain = c(
+    "Verbal Fluency (naïve)",
+    "Time Processing (naïve)",
+    "Processing Speed (naïve)",
+    "Executive Control (naïve)",
+    "Cognitive Flexibility (naïve)",
+    "Working Memory (naïve)",
+    "Attention (naïve)"
+      ),
+  g = c(0.29, 0.15, -1.06, 0.26, 0.38, 0.09, 0.37),
+  ci_low=c(0.13,-0.61,-1.77,-0.04,0.05,-0.15,0.03),
+  ci_high=c(0.44,0.91,-0.34,0.56,0.71,0.33,0.71),
+  sig = c(TRUE, FALSE, TRUE, FALSE, TRUE, FALSE, TRUE)
+)
+
+
+
+
+plot_df2 <- plot_df_vlow_primary_naive %>%
+ # arrange(g) %>%
+  mutate(
+    domain_wrapped = str_wrap(domain, 20),
+    Direction = ifelse(g >= 0, "Positive [Better Very Low Hz]", "Negative [Better High Hz]")  )
+
+
+plt <- ggplot(plot_df2) +
+    # Light reference grid (excluding zero)
+  geom_hline(
+    aes(yintercept = y),
+    data = data.frame(y = seq(-1.8, 1.5, 0.1)[seq(-1.8, 1.5, 0.1) != 0]),
+    color = "lightgrey",
+    linewidth = 0.4
+  ) +
+  
+  # Emphasized zero line
+  geom_hline(
+    yintercept = 0,
+    color = "gray12",
+    linewidth = 1.2
+  ) +
+  geom_col(
+    aes(
+      x = domain_wrapped,
+      y = g,
+      fill = Direction, alpha=0.85    ),
+    width = 0.9,
+    color = "gray20",
+    show.legend = TRUE
+  )  
+
+
+plt <- plt +
+  scale_y_continuous(
+    limits = c(-1.8, 1.5),
+    breaks = seq(-1.8, 1.5, 0.2),
+    expand = c(0, 0)
+  ) +
+  scale_fill_manual(
+    values = c(
+      "Positive [Better Very Low Hz]" = "#0c3647",
+      "Negative [Better High Hz]" = "#a82258"
+    )
+  ) +
+  scale_colour_manual(
+    values = c(
+      "Positive [Better Very Low Hz]" = "#0c3647",
+      "Negative [Better High Hz]" = "#a82258"
+    )
+  ) +
+  scale_alpha_identity() +
+  theme_minimal(base_size = 12) +
+  theme(
+    axis.title.x = element_blank(),
+    #axis.text.y = element_blank(),
+    axis.ticks = element_blank(),
+        axis.text.x = element_text(size = 9, color = "gray12", angle = 45, hjust = 1),
+    panel.grid = element_blank(),
+    legend.position = "right"
+
+  )
+
+
+plt <- plt + geom_text(aes(x = domain_wrapped,
+                    y = g + ifelse(g > 0, 0.1, -0.1), label = sprintf("%.2f", g)),
+    size = 3.5, color = "gray12")
+
+
+plt <- plt +
+  geom_segment(
+    data = plot_df2,
+    aes(
+      x = domain_wrapped,
+      xend = domain_wrapped,
+      y = ci_low,
+      yend = ci_high
+    ),
+    linewidth = 2.9,
+    color = "gray",alpha=0.4,
+    lineend = "round",
+    inherit.aes = TRUE
+  )
+
+plt
+
+
+ggsave(file="plt_vlow_prim_naive.svg", plot=plt, width=7, height=5)
+
+
+
+
+
+
+
+
+
+plot_df_vlow_primary_mlma <- tibble(
+  domain = c("Verbal Fluency (MLMA)",
+    "Time Processing (MLMA)",
+    "Processing Speed (MLMA)",
+    "Executive Control (MLMA)",
+    "Cognitive Flexibility (MLMA)",
+    "Working Memory (MLMA)",
+    "Attention (MLMA)" ),
+  g = c(0.29, -0.12, -0.59, 0.31, 0.33, 0.09, 0.25),
+  ci_low=c(0.13, -1.61,-1.14, 0.01, 0.13, -0.15, -0.22),
+  ci_high=c(0.44, 1.38,-0.03 , 0.6, 0.54, 0.33, 0.72),
+  sig = c( TRUE, FALSE, TRUE, TRUE, TRUE, FALSE, FALSE)
+)
+
+
+
+plot_df2 <- plot_df_vlow_primary_mlma %>%
+ # arrange(g) %>%
+  mutate(
+    domain_wrapped = str_wrap(domain, 20),
+    Direction = ifelse(g >= 0, "Positive [Better Very Low Hz]", "Negative [Better High Hz]")  )
+
+
+plt <- ggplot(plot_df2) +
+    # Light reference grid (excluding zero)
+  geom_hline(
+    aes(yintercept = y),
+    data = data.frame(y = seq(-1.8, 1.5, 0.1)[seq(-1.8, 1.5, 0.1) != 0]),
+    color = "lightgrey",
+    linewidth = 0.4
+  ) +
+  
+  # Emphasized zero line
+  geom_hline(
+    yintercept = 0,
+    color = "gray12",
+    linewidth = 1.2
+  ) +
+  geom_col(
+    aes(
+      x = domain_wrapped,
+      y = g,
+      fill = Direction, alpha=0.85    ),
+    width = 0.9,
+    color = "gray20",
+    show.legend = TRUE
+  )  
+
+
+plt <- plt +
+  scale_y_continuous(
+    limits = c(-1.8, 1.5),
+    breaks = seq(-1.8, 1.5, 0.2),
+    expand = c(0, 0)
+  ) +
+  scale_fill_manual(
+    values = c(
+      "Positive [Better Very Low Hz]" = "#0c3647",
+      "Negative [Better High Hz]" = "#a82258"
+    )
+  ) +
+  scale_colour_manual(
+    values = c(
+      "Positive [Better Very Low Hz]" = "#0c3647",
+      "Negative [Better High Hz]" = "#a82258"
+    )
+  ) +
+  scale_alpha_identity() +
+  theme_minimal(base_size = 12) +
+  theme(
+    axis.title.x = element_blank(),
+    #axis.text.y = element_blank(),
+    axis.ticks = element_blank(),
+        axis.text.x = element_text(size = 9, color = "gray12", angle = 45, hjust = 1),
+    panel.grid = element_blank(),
+    legend.position = "right"
+
+  )
+
+
+plt <- plt + geom_text(aes(x = domain_wrapped,
+                    y = g + ifelse(g > 0, 0.1, -0.1), label = sprintf("%.2f", g)),
+    size = 3.5, color = "gray12")
+
+
+plt <- plt +
+  geom_segment(
+    data = plot_df2,
+    aes(
+      x = domain_wrapped,
+      xend = domain_wrapped,
+      y = ci_low,
+      yend = ci_high
+    ),
+    linewidth = 2.9,
+    color = "gray",alpha=0.4,
+    lineend = "round",
+    inherit.aes = TRUE
+  )
+
+plt
+
+
+ggsave(file="plt_vlow_prim_mlma.svg", plot=plt, width=7, height=5)
+
+
+
+
+
+
+
+
+
+
+plot_df_vlow_sec_naive <- tibble(
+  domain = c( "Verbal Fluency (naïve)",
+    "Processing Speed (naïve)",
+    "Executive Control (naïve)",
+    "Cognitive Flexibility (naïve)",
+    "Top-down Attention (naïve)",
+    "Attention (naïve)" ),
+  g = c(0.33, 0.25, -0.4, 0.29, 0.20, -0.50),
+  ci_low=c(0.08, -0.07, -3.01, 0.13, -0.09, -1.38),
+  ci_high=c(0.58, 0.57, 2.21, 0.44, 0.48, 0.38),
+  sig = c(TRUE, FALSE, FALSE, TRUE, TRUE, FALSE)
+)
+
+
+
+
+plot_df2 <- plot_df_vlow_sec_naive %>%
+ # arrange(g) %>%
+  mutate(
+    domain_wrapped = str_wrap(domain, 20),
+    Direction = ifelse(g >= 0, "Positive [Better Very Low Hz]", "Negative [Better High Hz]")  )
+
+
+plt <- ggplot(plot_df2) +
+    # Light reference grid (excluding zero)
+  geom_hline(
+    aes(yintercept = y),
+    data = data.frame(y = seq(-1.8, 1.5, 0.1)[seq(-1.8, 1.5, 0.1) != 0]),
+    color = "lightgrey",
+    linewidth = 0.4
+  ) +
+  
+  # Emphasized zero line
+  geom_hline(
+    yintercept = 0,
+    color = "gray12",
+    linewidth = 1.2
+  ) +
+  geom_col(
+    aes(
+      x = domain_wrapped,
+      y = g,
+      fill = Direction, alpha=0.85    ),
+    width = 0.9,
+    color = "gray20",
+    show.legend = TRUE
+  )  
+
+
+plt <- plt +
+  scale_y_continuous(
+    breaks = seq(-1.8, 1.5, 0.2),
+    expand = c(0, 0)
+  ) +
+  coord_cartesian(
+    ylim = c(-1.8, 1.5)
+  ) +
+  scale_fill_manual(
+    values = c(
+      "Positive [Better Very Low Hz]" = "#0c3647",
+      "Negative [Better High Hz]" = "#a82258"
+    )
+  ) +
+  scale_colour_manual(
+    values = c(
+      "Positive [Better Very Low Hz]" = "#0c3647",
+      "Negative [Better High Hz]" = "#a82258"
+    )
+  ) +
+  scale_alpha_identity() +
+  theme_minimal(base_size = 12) +
+  theme(
+    axis.title.x = element_blank(),
+    #axis.text.y = element_blank(),
+    axis.ticks = element_blank(),
+        axis.text.x = element_text(size = 9, color = "gray12", angle = 45, hjust = 1),
+    panel.grid = element_blank(),
+    legend.position = "right"
+
+  )
+
+
+plt <- plt + geom_text(aes(x = domain_wrapped,
+                    y = g + ifelse(g > 0, 0.1, -0.1), label = sprintf("%.2f", g)),
+    size = 3.5, color = "gray12")
+
+
+plt <- plt +
+  geom_segment(
+    data = plot_df2,
+    aes(
+      x = domain_wrapped,
+      xend = domain_wrapped,
+      y = ci_low,
+      yend = ci_high
+    ),
+    linewidth = 2.9,
+    color = "gray",alpha=0.4,
+    lineend = "round",
+    inherit.aes = TRUE
+  )
+
+plt
+
+
+ggsave(file="plt_vlow_sec_naive.svg", plot=plt, width=6, height=5)
+
+
+
+
+plot_df_vlow_sec_mlma <- tibble(
+  domain = c("Verbal Fluency (MLMA)",
+    "Processing Speed (MLMA)",
+    "Executive Control (MLMA)",
+    "Cognitive Flexibility (MLMA)",
+    "Top-down Attention (MLMA)",
+    "Attention (MLMA)" ),
+  g = c(0.33, 0.13, -0.07, 0.29, 0.21, -0.31),
+  ci_low=c(0.08, -0.17, -0.57, 0.13, 0.01, -0.57),
+  ci_high=c(0.58, 0.43, 0.43, 0.44, 0.42, -0.05),
+  sig = c(TRUE, FALSE, FALSE, TRUE, TRUE, FALSE)
+)
+
+
+
+
+
+
+plot_df2 <- plot_df_vlow_sec_mlma %>%
+ # arrange(g) %>%
+  mutate(
+    domain_wrapped = str_wrap(domain, 20),
+    Direction = ifelse(g >= 0, "Positive [Better Very Low Hz]", "Negative [Better High Hz]")  )
+
+
+plt <- ggplot(plot_df2) +
+    # Light reference grid (excluding zero)
+  geom_hline(
+    aes(yintercept = y),
+    data = data.frame(y = seq(-1.8, 1.5, 0.1)[seq(-1.8, 1.5, 0.1) != 0]),
+    color = "lightgrey",
+    linewidth = 0.4
+  ) +
+  
+  # Emphasized zero line
+  geom_hline(
+    yintercept = 0,
+    color = "gray12",
+    linewidth = 1.2
+  ) +
+  geom_col(
+    aes(
+      x = domain_wrapped,
+      y = g,
+      fill = Direction, alpha=0.85    ),
+    width = 0.9,
+    color = "gray20",
+    show.legend = TRUE
+  )  
+
+
+plt <- plt +
+  scale_y_continuous(
+    breaks = seq(-1.8, 1.5, 0.2),
+    expand = c(0, 0)
+  ) +
+  coord_cartesian(
+    ylim = c(-1.8, 1.5)
+  ) +
+  scale_fill_manual(
+    values = c(
+      "Positive [Better Very Low Hz]" = "#0c3647",
+      "Negative [Better High Hz]" = "#a82258"
+    )
+  ) +
+  scale_colour_manual(
+    values = c(
+      "Positive [Better Very Low Hz]" = "#0c3647",
+      "Negative [Better High Hz]" = "#a82258"
+    )
+  ) +
+  scale_alpha_identity() +
+  theme_minimal(base_size = 12) +
+  theme(
+    axis.title.x = element_blank(),
+    #axis.text.y = element_blank(),
+    axis.ticks = element_blank(),
+        axis.text.x = element_text(size = 9, color = "gray12", angle = 45, hjust = 1),
+    panel.grid = element_blank(),
+    legend.position = "right"
+
+  )
+
+
+plt <- plt + geom_text(aes(x = domain_wrapped,
+                    y = g + ifelse(g > 0, 0.1, -0.1), label = sprintf("%.2f", g)),
+    size = 3.5, color = "gray12")
+
+
+plt <- plt +
+  geom_segment(
+    data = plot_df2,
+    aes(
+      x = domain_wrapped,
+      xend = domain_wrapped,
+      y = ci_low,
+      yend = ci_high
+    ),
+    linewidth = 2.9,
+    color = "gray",alpha=0.4,
+    lineend = "round",
+    inherit.aes = TRUE
+  )
+
+plt
+
+
+ggsave(file="plt_vlow_sec_mlma.svg", plot=plt, width=6, height=5)
+
+
+
+# -------
+
