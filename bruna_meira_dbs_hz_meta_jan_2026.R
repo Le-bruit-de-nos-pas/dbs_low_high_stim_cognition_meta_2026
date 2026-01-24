@@ -147,7 +147,7 @@ nrow(low_high_df)
 
 res_lh <- rma.mv(
   yi, vi,
-  random = ~ 1 | study_name / study_id ,
+  random = ~ 1 | study_name / effect_id ,
   method = "REML",
   test="t",
   data = low_high_df
@@ -181,7 +181,7 @@ run_with_r_lh <- function(r_val) {
     ungroup() %>%
     rma.mv(
       yi, vi,
-      random = ~ 1 |study_name,
+      random = ~ 1 |study_name / effect_id,
       method = "REML",
       data = .
     )
@@ -229,7 +229,7 @@ run_with_r <- function(r_val) {
     ungroup() %>%
     rma.mv(
       yi, vi,
-      random = ~ 1 | study_id / effect_id,
+      random = ~ 1 | study_name / effect_id,
       method = "REML",
       data = .
     ) %>%
@@ -295,7 +295,7 @@ for(d in valid_domains){
   res <- rma.mv(
     yi = yi,
     V = vi,
-    random = ~1 | study_name,
+    random = ~1 | study_name / effect_id ,
     method = "REML",
     data = df
   )
@@ -336,7 +336,7 @@ library(robumeta)
 res_rve <- robu(
   formula = yi ~ 1,           # intercept-only model
   data = low_high_df,
-  studynum = study_id,        # clusters by study
+  studynum = effect_id ,        # clusters by study
   var.eff.size = vi,          # variance of effect sizes
   modelweights = "CORR",      # correlated effects model
   rho = 0.6                   # assumed correlation between effect sizes within study
@@ -356,7 +356,7 @@ loso_results <- lapply(studies, function(s) {
   
   res <- rma.mv(
     yi, vi,
-    random = ~ 1 | study_id / effect_id,
+    random = ~ 1 | study_name / effect_id,
     method = "REML",
     data = subset(low_high_df, study_name != s)
   )
@@ -409,7 +409,7 @@ unique(vlow_high_df$study_name)
 
 res_vlh <- rma.mv(
   yi, vi,
-  random = ~ 1 | study_id / effect_id,
+  random = ~ 1 |  study_name / effect_id,
   method = "REML",
   data = vlow_high_df
 )
@@ -444,7 +444,7 @@ run_with_r_vlh <- function(r_val) {
     ungroup() %>%
     rma.mv(
       yi, vi,
-      random = ~ 1 | study_name,
+      random = ~ 1 | study_name / effect_id,
       method = "REML",
       data = .
     )
@@ -493,7 +493,7 @@ run_with_r <- function(r_val) {
     ungroup() %>%
     rma.mv(
       yi, vi,
-      random = ~ 1 | study_name,
+      random = ~ 1 | study_name / effect_id,
       method = "REML",
       data = .
     ) %>%
@@ -557,7 +557,7 @@ for(d in valid_domains){
   res <- rma.mv(
     yi = yi,
     V = vi,
-    random = ~1 | study_name,
+    random = ~1 | effect_id,
     method = "REML",
     data = df
   )
@@ -600,7 +600,7 @@ library(robumeta)
 res_rve <- robu(
   formula = yi ~ 1,           # intercept-only model
   data = vlow_high_df,
-  studynum = study_id,        # clusters by study
+  studynum = study_name / effect_id,        # clusters by study
   var.eff.size = vi,          # variance of effect sizes
   modelweights = "CORR",      # correlated effects model
   rho = 0.6                   # assumed correlation between effect sizes within study
@@ -620,7 +620,7 @@ loso_results <- lapply(studies, function(s) {
   
   res <- rma.mv(
     yi, vi,
-    random = ~ 1 | study_id / effect_id,
+    random = ~ 1 | study_name / effect_id,
     method = "REML",
     data = subset(vlow_high_df, study_name != s)
   )
@@ -647,8 +647,8 @@ forest(
   sei = loso_df$se,
   slab = paste("Leave out:", loso_df$left_out),
   xlab = "Pooled Hedges' g (Leave-One-Out)",
-  alim = c(-0.2, 0.4),
-  at = seq(-0.2, 0.4, 0.1),
+  alim = c(-0.1, 0.5),
+  at = seq(-0.1, 0.5, 0.1),
   cex = 0.8
 )
 
@@ -729,7 +729,7 @@ for(d in valid_domains){
   res <- rma.mv(
     yi = yi,
     V = vi,
-    random = ~1 | study_name / effect_id,
+    random = ~1 |  effect_id,
     method = "REML",
     data = df
   )
@@ -805,7 +805,7 @@ for(d in valid_domains){
   res <- rma.mv(
     yi = yi,
     V = vi,
-    random = ~1 | study_name / effect_id,
+    random = ~1 | effect_id,
     method = "REML",
     data = df
   )
@@ -866,7 +866,7 @@ length(unique(low_high_df$study_name))
 
 res_lh <- rma.mv(
   yi, vi,
-  random = ~ 1 | study_name/effect_id ,
+  random = ~ 1 | effect_id ,
   method = "REML",
   test="t",
   data = low_high_df
@@ -1081,7 +1081,7 @@ unique(vlow_high_df$study_name)
 
 res_vlh <- rma.mv(
   yi, vi,
-  random = ~ 1 | study_name,
+  random = ~ 1 | study_name / effect_id ,
   method = "REML",
   data = vlow_high_df
 )
@@ -1307,7 +1307,7 @@ for(d in valid_domains){
   res <- rma.mv(
     yi = yi,
     V = vi,
-    random = ~1 | study_name,
+    random = ~1 | study_name / study_id,
     method = "REML",
     data = df
   )
@@ -1383,7 +1383,7 @@ for(d in valid_domains){
   res <- rma.mv(
     yi = yi,
     V = vi,
-    random = ~1 | study_name,
+    random = ~1 | study_name / effect_id,
     method = "REML",
     data = df
   )
@@ -1427,6 +1427,88 @@ domain_results_df
 final_df_new_flags_group_paulo_jan_17 <- fread("final_df_new_flags_group_paulo_jan_17.csv")
 
 
+low_high_df <- final_df_new_flags_group_paulo_jan_17 %>%
+  filter(
+     (condition_A == "LowHz" & condition_B == "HighHz") |
+      (condition_A == "HighHz" & condition_B == "LowHz")
+  ) %>% select(study_name, study_id, effect_id, yi, vi, `Cog Task`, `Verbal Fluency`:`Attention`)
+
+low_high_df <- low_high_df %>% gather(key="Domain", value="ON", `Verbal Fluency`:`Attention`) %>%
+  drop_na() %>%
+  arrange(study_name, study_id, effect_id, Domain) %>% select(-ON)
+
+
+
+
+
+
+table(low_high_df$Domain)
+
+
+
+
+# Identify domains with at least 2 effect sizes
+domain_counts <- table(low_high_df$Domain)
+valid_domains <- names(domain_counts[domain_counts >= 2])
+
+# Create empty list to store results
+domain_results <- list()
+forest_plots <- list()
+
+for(d in valid_domains){
+  
+  df <- low_high_df %>% filter(Domain == d)
+  
+  # Run multilevel meta-analysis
+  res <- rma.mv(
+    yi = yi,
+    V = vi,
+    random = ~1 | study_name / effect_id,
+    method = "REML",
+    data = df
+  )
+  
+  # Store results
+  domain_results[[d]] <- tibble(
+    domain = d,
+    estimate = res$beta[1],
+    se = res$se,
+    ci.lb = res$ci.lb,
+    ci.ub = res$ci.ub,
+    pval = res$pval
+  )
+  
+  # Create forest plot
+  forest(res,
+         slab = paste(df$study_name, "-", df$`Cog Task`),
+         xlab = "Hedges' g (positive = better cognitive performance for [Low Hz])",
+         main = paste("\n Forest plot:", d),
+         annotate=TRUE, addfit=TRUE, 
+         showweights=TRUE, header=TRUE,
+         cex = 0.9,
+         col="white", border="firebrick",
+         colout="firebrick")
+  
+  forest_plots[[d]] <- res
+}
+
+# Combine all results
+domain_results_df <- bind_rows(domain_results)
+domain_results_df
+
+250
+500
+350
+450
+350
+
+# -----------
+
+# VLOW VS HIGH - Any Domain Across Main+Secondary+Terteary ----------
+
+final_df_new_flags_group_paulo_jan_17 <- fread("final_df_new_flags_group_paulo_jan_17.csv")
+
+
 vlow_high_df <- final_df_new_flags_group_paulo_jan_17 %>%
   filter(
     (condition_A == "VeryLowHz" & condition_B == "HighHz") |
@@ -1463,7 +1545,7 @@ for(d in valid_domains){
   res <- rma.mv(
     yi = yi,
     V = vi,
-    random = ~1 | study_name,
+    random = ~1 | study_name / effect_id,
     method = "REML",
     data = df
   )
@@ -1481,7 +1563,7 @@ for(d in valid_domains){
   # Create forest plot
   forest(res,
          slab = paste(df$study_name, "-", df$`Cog Task`),
-         xlab = "Hedges' g (positive = better cognitive performance for [Low Hz])",
+         xlab = "Hedges' g (positive = better cognitive performance for [Very Low Hz])",
          main = paste("\n Forest plot:", d),
          annotate=TRUE, addfit=TRUE, 
          showweights=TRUE, header=TRUE,
@@ -1496,6 +1578,13 @@ for(d in valid_domains){
 domain_results_df <- bind_rows(domain_results)
 domain_results_df
 
+400
+450
+350
+550
+500
+550
+700
 # -----------
 
 # Radial plots summary horizontal -------
@@ -2067,9 +2156,9 @@ plot_df_vlow_primary_mlma <- tibble(
     "Cognitive Flexibility (MLMA)",
     "Working Memory (MLMA)",
     "Attention (MLMA)" ),
-  g = c(0.29, -0.12, -0.59, 0.31, 0.33, 0.09, 0.25),
-  ci_low=c(0.13, -1.61,-1.14, 0.01, 0.13, -0.15, -0.22),
-  ci_high=c(0.44, 1.38,-0.03 , 0.6, 0.54, 0.33, 0.72),
+  g = c(0.29, -0.12, -0.85, 0.26, 0.33, 0.09, 0.25),
+  ci_low=c(0.13, -1.69,-1.70, -0.04, 0.13, -0.15, -0.22),
+  ci_high=c(0.44, 1.46, 0 , 0.56, 0.54, 0.33, 0.72),
   sig = c( TRUE, FALSE, TRUE, TRUE, TRUE, FALSE, FALSE)
 )
 
@@ -2290,9 +2379,9 @@ plot_df_vlow_sec_mlma <- tibble(
     "Cognitive Flexibility (MLMA)",
     "Top-down Attention (MLMA)",
     "Attention (MLMA)" ),
-  g = c(0.33, 0.13, -0.07, 0.29, 0.21, -0.31),
-  ci_low=c(0.08, -0.17, -0.57, 0.13, 0.01, -0.57),
-  ci_high=c(0.58, 0.43, 0.43, 0.44, 0.42, -0.05),
+  g = c(0.33, 0.18, -0.40, 0.29, 0.21, -0.50),
+  ci_low=c(0.08, -0.20, -3.0, 0.13, 0.01, -1.38),
+  ci_high=c(0.58, 0.55, 2.21, 0.44, 0.42, 0.38),
   sig = c(TRUE, FALSE, FALSE, TRUE, TRUE, FALSE)
 )
 
@@ -2666,8 +2755,6 @@ ggsave(file="plt_vlow_prim_naive_circ.svg", plot=plt, width=5, height=5)
 
 
 
-
-
 plot_df_vlow_primary_mlma <- tibble(
   domain = c("Verbal Fluency (MLMA)",
     "Time Processing (MLMA)",
@@ -2676,11 +2763,12 @@ plot_df_vlow_primary_mlma <- tibble(
     "Cognitive Flexibility (MLMA)",
     "Working Memory (MLMA)",
     "Attention (MLMA)" ),
-  g = c(0.29, -0.12, -0.59, 0.31, 0.33, 0.09, 0.25),
-  ci_low=c(0.13, -1.61,-1.14, 0.01, 0.13, -0.15, -0.22),
-  ci_high=c(0.44, 1.38,-0.03 , 0.6, 0.54, 0.33, 0.72),
+  g = c(0.29, -0.12, -0.85, 0.26, 0.33, 0.09, 0.25),
+  ci_low=c(0.13, -1.69,-1.70, -0.04, 0.13, -0.15, -0.22),
+  ci_high=c(0.44, 1.46, 0 , 0.56, 0.54, 0.33, 0.72),
   sig = c( TRUE, FALSE, TRUE, TRUE, TRUE, FALSE, FALSE)
 )
+
 
 
 
@@ -2791,11 +2879,12 @@ plot_df_vlow_sec_mlma <- tibble(
     "Cognitive Flexibility (MLMA)",
     "Top-down Attention (MLMA)",
     "Attention (MLMA)" ),
-  g = c(0.33, 0.13, -0.07, 0.29, 0.21, -0.31),
-  ci_low=c(0.08, -0.17, -0.57, 0.13, 0.01, -0.57),
-  ci_high=c(0.58, 0.43, 0.43, 0.44, 0.42, -0.05),
+  g = c(0.33, 0.18, -0.40, 0.29, 0.21, -0.50),
+  ci_low=c(0.08, -0.20, -3.0, 0.13, 0.01, -1.38),
+  ci_high=c(0.58, 0.55, 2.21, 0.44, 0.42, 0.38),
   sig = c(TRUE, FALSE, FALSE, TRUE, TRUE, FALSE)
 )
+
 
 
 plot_df2 <- plot_df_vlow_sec_mlma %>%
@@ -2804,6 +2893,10 @@ plot_df2 <- plot_df_vlow_sec_mlma %>%
     domain_wrapped = str_wrap(domain, 20),
     Direction = ifelse(g >= 0, "Positive [Better Very Low Hz]", "Negative [Better High Hz]")  )
 
+
+plot_df2 <- plot_df2 %>% 
+  mutate(ci_high=ifelse(ci_high>=1.5,1.5,ci_high)) %>%
+  mutate(ci_low=ifelse(ci_low<=-1.8,-1.8,ci_low))
 
 plt <- ggplot(plot_df2) + 
   geom_hline( aes(yintercept = y), data = data.frame(y = seq(-1.8, 1.5, 0.1)[seq(-1.8, 1.5, 0.1) != 0]), color = "lightgrey", linewidth = 0.4 ) + 
@@ -2978,7 +3071,7 @@ length(unique(low_high_df$study_name)) # 20 studies
 
 res_lh <- rma.mv(
   yi, vi,
-  random = ~ 1 | study_name ,
+  random = ~ 1 | study_name / effect_id ,
   method = "REML",
   test="t",
   data = low_high_df
@@ -3012,7 +3105,7 @@ run_with_r_lh <- function(r_val) {
     ungroup() %>%
     rma.mv(
       yi, vi,
-      random = ~ 1 |study_name,
+      random = ~ 1 | study_name / effect_id ,
       method = "REML",
       data = .
     )
@@ -3060,7 +3153,7 @@ run_with_r <- function(r_val) {
     ungroup() %>%
     rma.mv(
       yi, vi,
-      random = ~ 1 | study_name ,
+      random = ~ 1 | effect_id ,
       method = "REML",
       data = .
     ) %>%
@@ -3126,7 +3219,7 @@ for(d in valid_domains){
   res <- rma.mv(
     yi = yi,
     V = vi,
-    random = ~1 | study_name ,
+    random = ~1 | study_name / effect_id ,
     method = "REML",
     data = df
   )
@@ -3176,7 +3269,7 @@ library(robumeta)
 res_rve <- robu(
   formula = yi ~ 1,           # intercept-only model
   data = low_high_df,
-  studynum = study_id,        # clusters by study
+  studynum = effect_id,        # clusters by study
   var.eff.size = vi,          # variance of effect sizes
   modelweights = "CORR",      # correlated effects model
   rho = 0.6                   # assumed correlation between effect sizes within study
@@ -3196,7 +3289,7 @@ loso_results <- lapply(studies, function(s) {
   
   res <- rma.mv(
     yi, vi,
-    random = ~ 1 | study_name,
+    random = ~ 1 | study_name / effect_id,
     method = "REML",
     data = subset(low_high_df, study_name != s)
   )
@@ -3303,7 +3396,7 @@ for(d in valid_domains){
   res <- rma.mv(
     yi = yi,
     V = vi,
-    random = ~1 | study_id ,
+    random = ~1 | study_name/ effect_id ,
     method = "REML",
       control = list(optimizer = "optim", optmethod = "BFGS"),
     data = df
@@ -3366,7 +3459,7 @@ length(unique(low_high_df$study_name)) #16
 
 res_lh <- rma.mv(
   yi, vi,
-  random = ~ 1 | study_name ,
+  random = ~ 1 |study_name /  effect_id ,
   method = "REML",
   test="t",
   data = low_high_df
@@ -3523,7 +3616,7 @@ loso_results <- lapply(studies, function(s) {
   
   res <- rma.mv(
     yi, vi,
-    random = ~ 1 | study_id / effect_id,
+    random = ~ 1 | study_name /  effect_id,
     method = "REML",
     data = subset(low_high_df, study_name != s)
   )
@@ -3590,7 +3683,7 @@ for(d in valid_domains){
   res <- rma.mv(
     yi = yi,
     V = vi,
-    random = ~1 | study_name,
+    random = ~1 | study_name / effect_id ,
     method = "REML",
     data = df
   )
@@ -3675,7 +3768,7 @@ for(d in valid_domains){
   res <- rma.mv(
     yi = yi,
     V = vi,
-    random = ~1 | study_name,
+    random = ~1 | study_name / effect_id,
     method = "REML",
     data = df
   )
@@ -3840,9 +3933,9 @@ plot_df_lowvlow_primary_mlma <- tibble(
     "Working Memory (MLMA)",
     "Attention (MLMA)",
     "Verbal Episodic Memory (MLMA)"),
-  g = c(0.27, -0.12, -0.45, 0.22, 0.34, 0.02, 0.25, 0.53),
-  ci_low=c(0.16, -1.61,-0.96, 0.00, 0.14, -0.18, -0.22, -0.09),
-  ci_high=c(0.37, 1.38, 0.05 , 0.43, 0.54, 0.21, 0.72, 1.15)
+  g = c(0.27, -0.12, -0.67, 0.18, 0.38, 0.01, 0.25, 0.53),
+  ci_low=c(0.16, -1.69,-1.43, -0.05, 0.09, -0.22, -0.22, -0.09),
+  ci_high=c(0.37, 1.46, 0.10 , 0.40, 0.68, 0.24, 0.72, 1.15)
 )
 
 
@@ -4065,9 +4158,9 @@ plot_df_lowvlow_sec_mlma <- tibble(
     "Top-Down Attention (MLMA)",
     "Attention (MLMA)",
     "Bottom-up Attention (naïve)" ),
-  g = c(0.34, 0.13, -0.07, 0.27, 0.15, -0.31, -0.32),
-  ci_low=c(0.10, -0.17, -0.57, 0.16, -0.02, -0.57, -1.53),
-  ci_high=c(0.58, 0.43, 0.43, 0.37, 0.32, -0.05, 0.48)
+  g = c(0.34, 0.18, -0.40, 0.27, 0.13, -0.50, -0.32),
+  ci_low=c(0.10, -0.20, -3.01, 0.16, -0.08, -1.38, -1.53),
+  ci_high=c(0.58, 0.55, 1.21, 0.37, 0.34, 0.38, 0.48)
 )
 
 
@@ -4234,7 +4327,6 @@ ggsave(file="plt_lowvlow_prim_naive_circ.svg", plot=plt, width=5, height=5)
 
 
 
-
 plot_df_lowvlow_primary_mlma <- tibble(
   domain = c("Verbal Fluency (MLMA)",
     "Time Processing (MLMA)",
@@ -4244,10 +4336,11 @@ plot_df_lowvlow_primary_mlma <- tibble(
     "Working Memory (MLMA)",
     "Attention (MLMA)",
     "Verbal Episodic Memory (MLMA)"),
-  g = c(0.27, -0.12, -0.45, 0.22, 0.34, 0.02, 0.25, 0.53),
-  ci_low=c(0.16, -1.61,-0.96, 0.00, 0.14, -0.18, -0.22, -0.09),
-  ci_high=c(0.37, 1.38, 0.05 , 0.43, 0.54, 0.21, 0.72, 1.15)
+  g = c(0.27, -0.12, -0.67, 0.18, 0.38, 0.01, 0.25, 0.53),
+  ci_low=c(0.16, -1.69,-1.43, -0.05, 0.09, -0.22, -0.22, -0.09),
+  ci_high=c(0.37, 1.46, 0.10 , 0.40, 0.68, 0.24, 0.72, 1.15)
 )
+
 
 
 plot_df2 <- plot_df_lowvlow_primary_mlma %>%
@@ -4359,11 +4452,10 @@ plot_df_lowvlow_sec_mlma <- tibble(
     "Top-Down Attention (MLMA)",
     "Attention (MLMA)",
     "Bottom-up Attention (naïve)" ),
-  g = c(0.34, 0.13, -0.07, 0.27, 0.15, -0.31, -0.32),
-  ci_low=c(0.10, -0.17, -0.57, 0.16, -0.02, -0.57, -1.53),
-  ci_high=c(0.58, 0.43, 0.43, 0.37, 0.32, -0.05, 0.48)
+  g = c(0.34, 0.18, -0.07, 0.27, 0.13, -0.50, -0.32),
+  ci_low=c(0.10, -0.20, -0.57, 0.16, -0.08, -1.38, -1.53),
+  ci_high=c(0.58, 0.55, 0.43, 0.37, 0.34, 0.38, 0.48)
 )
-
 
 
 plot_df2 <- plot_df_lowvlow_sec_mlma %>%
@@ -4404,127 +4496,3 @@ ggsave(file="plt_lowvlow_sec_mlma_circ.svg", plot=plt, width=5, height=5)
 # -------
 
 
-# OFF vs ON Data pre-processing  -------------------------
-
-final_df <- read_excel("LFS.HFS.toanalyse.new.xlsx", sheet = "Folha1")
-
-names(final_df)
-
-length(unique(final_df$study_name)) # 22
-
-final_df %>% select(study_name, design) %>% distinct() %>% count() # 23
-
-unique(final_df$contrast)
-
-assumed_r <- 0.5 
-
-unique(final_df$design)
-
-final_df <- final_df %>%
-  mutate(
-    design_type = if_else(
-      grepl("Within", design, ignore.case = TRUE),
-      "within",
-      "between"
-    )
-  )
-
-# Within-subject Hedges g (small sample correct SMD)
-
-hedges_g_within <- function(m1, m2, sd1, sd2, n, r) {
-  sd_diff <- sqrt(sd1^2 + sd2^2 - 2*r*sd1*sd2)
-  dz <- (m1 - m2) / sd_diff
-  J <- 1 - (3 / (4*n - 1))
-  g <- dz * J
-  var_g <- (1/n) + (g^2 / (2*n))
-  list(g = g, v = var_g)
-}
-
-
-# Between-subject Hedges g
-hedges_g_between <- function(m1, m2, sd1, sd2, n1, n2) {
-  s_pooled <- sqrt(
-    ((n1 - 1)*sd1^2 + (n2 - 1)*sd2^2) / (n1 + n2 - 2)
-  )
-  d <- (m1 - m2) / s_pooled
-  J <- 1 - (3 / (4*(n1 + n2) - 9))
-  g <- d * J
-  var_g <- (n1 + n2)/(n1*n2) + (g^2/(2*(n1 + n2)))
-  list(g = g, v = var_g)
-}
-
-
-
-final_df <- final_df %>%
-  mutate(
-    mean_A = as.numeric(mean_A),
-    mean_B = as.numeric(mean_B),
-    sd_A   = as.numeric(sd_A),
-    sd_B   = as.numeric(sd_B),
-    n_A    = as.numeric(n_A),
-    n_B    = as.numeric(n_B)
-  )
-
-
-final_df <- final_df %>%
-  rowwise() %>%
-  mutate(
-    es = list(
-      if (design_type == "within") {
-        hedges_g_within(
-          mean_A, mean_B,
-          sd_A, sd_B,
-          n_A,
-          assumed_r
-        )
-      } else {
-        hedges_g_between(
-          mean_A, mean_B,
-          sd_A, sd_B,
-          n_A, n_B
-        )
-      }
-    ),
-    yi = es$g,
-    vi = es$v
-  ) %>%
-  ungroup() %>%
-  select(-es)
-
-
-
-# SMD/hedges_g sign correction
-
-
-final_df <- final_df %>%
-  mutate(
-    yi = if_else(higher_is_better=="TRUE", yi, -yi)
-  )
-
-
-summary(final_df$yi)
-summary(final_df$vi)
-
-
-# How to treat the nested structure
-# Use study_id to treat all contrasts as independendt, study_name as dependent
-
-final_df <- final_df %>%
-  mutate(
-    study_id = as.factor(study_id),
-    effect_id = row_number()
-  )
-
-
-# final_df <- final_df %>%
-#   group_by(study_name) %>%         # group by study
-#   mutate(effect_id = row_number()) %>%  # effect_id unique within study
-#   ungroup() %>%
-#   mutate(study_name = as.factor(study_name),
-#          effect_id = as.factor(effect_id))
-
-
-#fwrite(final_df, "final_df_new.csv")
-
-
-# ----------------
