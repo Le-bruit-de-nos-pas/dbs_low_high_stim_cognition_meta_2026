@@ -4496,3 +4496,1511 @@ ggsave(file="plt_lowvlow_sec_mlma_circ.svg", plot=plt, width=5, height=5)
 # -------
 
 
+# OFF vs ON Data pre-processing  -------------------------
+
+final_df <- read_excel("LFS.HFS.toanalyse.new.xlsx", sheet = "Folha1")
+
+names(final_df)
+
+length(unique(final_df$study_name)) # 22
+
+final_df %>% select(study_name, design) %>% distinct() %>% count() # 23
+
+unique(final_df$contrast)
+
+assumed_r <- 0.5 
+
+unique(final_df$design)
+
+final_df <- final_df %>%
+  mutate(
+    design_type = if_else(
+      grepl("Within", design, ignore.case = TRUE),
+      "within",
+      "between"
+    )
+  )
+
+# Within-subject Hedges g (small sample correct SMD)
+
+hedges_g_within <- function(m1, m2, sd1, sd2, n, r) {
+  sd_diff <- sqrt(sd1^2 + sd2^2 - 2*r*sd1*sd2)
+  dz <- (m1 - m2) / sd_diff
+  J <- 1 - (3 / (4*n - 1))
+  g <- dz * J
+  var_g <- (1/n) + (g^2 / (2*n))
+  list(g = g, v = var_g)
+}
+
+
+# Between-subject Hedges g
+hedges_g_between <- function(m1, m2, sd1, sd2, n1, n2) {
+  s_pooled <- sqrt(
+    ((n1 - 1)*sd1^2 + (n2 - 1)*sd2^2) / (n1 + n2 - 2)
+  )
+  d <- (m1 - m2) / s_pooled
+  J <- 1 - (3 / (4*(n1 + n2) - 9))
+  g <- d * J
+  var_g <- (n1 + n2)/(n1*n2) + (g^2/(2*(n1 + n2)))
+  list(g = g, v = var_g)
+}
+
+
+
+final_df <- final_df %>%
+  mutate(
+    mean_A = as.numeric(mean_A),
+    mean_B = as.numeric(mean_B),
+    sd_A   = as.numeric(sd_A),
+    sd_B   = as.numeric(sd_B),
+    n_A    = as.numeric(n_A),
+    n_B    = as.numeric(n_B)
+  )
+
+
+final_df <- final_df %>%
+  rowwise() %>%
+  mutate(
+    es = list(
+      if (design_type == "within") {
+        hedges_g_within(
+          mean_A, mean_B,
+          sd_A, sd_B,
+          n_A,
+          assumed_r
+        )
+      } else {
+        hedges_g_between(
+          mean_A, mean_B,
+          sd_A, sd_B,
+          n_A, n_B
+        )
+      }
+    ),
+    yi = es$g,
+    vi = es$v
+  ) %>%
+  ungroup() %>%
+  select(-es)
+
+
+
+# SMD/hedges_g sign correction
+
+
+final_df <- final_df %>%
+  mutate(
+    yi = if_else(higher_is_better=="TRUE", yi, -yi)
+  )
+
+
+summary(final_df$yi)
+summary(final_df$vi)
+
+
+# How to treat the nested structure
+# Use study_id to treat all contrasts as independendt, study_name as dependent
+
+final_df <- final_df %>%
+  mutate(
+    study_id = as.factor(study_id),
+    effect_id = row_number()
+  )
+
+
+# final_df <- final_df %>%
+#   group_by(study_name) %>%         # group by study
+#   mutate(effect_id = row_number()) %>%  # effect_id unique within study
+#   ungroup() %>%
+#   mutate(study_name = as.factor(study_name),
+#          effect_id = as.factor(effect_id))
+
+
+#fwrite(final_df, "final_df_new.csv")
+
+
+# ----------------
+
+# OFF vs ON Overall and Main Domains  ------------
+
+off_on_df <- final_df %>%
+  filter( (condition_A == "Off" & condition_B != "Off") )
+
+
+table(off_on_df$condition_A, off_on_df$condition_B)
+
+nrow(off_on_df) # 131 contrasts
+
+length(unique(off_on_df$study_name)) # 14 studies
+
+res_lh <- rma.mv(
+  yi, vi,
+  random = ~ 1 | study_name / effect_id ,
+  method = "REML",
+  test="t",
+  data = off_on_df
+)
+
+summary(res_lh)
+
+
+tau2 <- res_lh$sigma2
+I2 <- 100 * tau2 / (tau2 + mean(off_on_df$vi))
+
+tau2
+I2
+
+
+run_with_r_lh <- function(r_val) {
+  off_on_df %>%
+    rowwise() %>%
+    mutate(
+      es = list(
+        if (design_type == "within") {
+          hedges_g_within(mean_A, mean_B, sd_A, sd_B, n_A, r_val)
+        } else {
+          hedges_g_between(mean_A, mean_B, sd_A, sd_B, n_A, n_B)
+        }
+      ),
+      yi = es$g,
+      vi = es$v,
+      yi = if_else(higher_is_better=="TRUE", yi, -yi)  # flip sign
+    ) %>%
+    ungroup() %>%
+    rma.mv(
+      yi, vi,
+      random = ~ 1 |study_name/ effect_id,
+      method = "REML",
+      data = .
+    )
+}
+
+summary(run_with_r_lh(0.3)) #012
+summary(run_with_r_lh(0.5)) #0.14
+summary(run_with_r_lh(0.7)) # 0.17
+
+
+meta::forest(
+  res_lh,
+  annotate=TRUE, addfit=TRUE, 
+  showweights=TRUE, header=TRUE,
+  slab = paste(off_on_df$study_name, "-", off_on_df$`Cog Task`),
+  xlab = "Hedges' g (positive = better cognitive performance for [OFF Hz])",
+  cex = 0.9,
+  col="white", border="firebrick",
+  colout="firebrick"
+)
+
+
+
+
+# Define a sequence of r values to test
+r_vals <- seq(0, 0.9, by = 0.1)
+
+
+# Function to compute meta-analysis for a given r
+run_with_r <- function(r_val) {
+  off_on_df %>%
+    rowwise() %>%
+    mutate(
+      es = list(
+        if (design_type == "within") {
+          hedges_g_within(mean_A, mean_B, sd_A, sd_B, n_A, r_val)
+        } else {
+          hedges_g_between(mean_A, mean_B, sd_A, sd_B, n_A, n_B)
+        }
+      ),
+      yi = es$g,
+      vi = es$v,
+      yi = if_else(higher_is_better=="TRUE", yi, -yi)   # flip sign if needed
+    ) %>%
+    ungroup() %>%
+    rma.mv(
+      yi, vi,
+      random = ~ 1 | study_name/ effect_id ,
+      method = "REML",
+      data = .
+    ) %>%
+    { tibble(
+      r = r_val,
+      estimate = .$beta[1],
+      se = .$se,
+      ci.lb = .$ci.lb,
+      ci.ub = .$ci.ub
+    ) }
+}
+
+# Run the sensitivity analysis across all r values
+results <- map_df(r_vals, run_with_r)
+
+# Plot effect size vs r
+results %>%
+  ggplot(aes(x = r, y = estimate)) +
+  ylim(-0.7,0.7) +
+  geom_line(color = "deepskyblue4", size = 1) +
+  geom_ribbon(aes(ymin = ci.lb, ymax = ci.ub), alpha = 0.1, fill = "deepskyblue4") +
+  geom_hline(yintercept = 0, linetype = "dashed", colour="firebrick", size=1) +
+  labs(
+    x = "\n Assumed correlation r",
+    y = "Effect size (Hedges' g) \n",
+    title = "OFF vs ON \nSensitivity of effect size to assumed correlation r"
+  ) +
+  theme(axis.text.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        legend.position = "none") +
+  theme(panel.background = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        strip.background = element_blank(),
+        strip.text = element_blank(),
+        axis.line = element_blank(),
+        axis.text.x = element_text(size = 10),
+        axis.text.y = element_text(size = 10),
+        axis.title.x = element_text(size = 10, vjust = -0.5),
+        axis.title.y = element_text(size = 10, vjust = -0.5),
+        plot.margin = margin(5, 5, 5, 5, "pt")) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+
+
+
+table(off_on_df$Main_cog_domain)
+
+
+# Identify domains with at least 2 effect sizes
+domain_counts <- table(off_on_df$Main_cog_domain)
+valid_domains <- names(domain_counts[domain_counts >= 2])
+
+# Create empty list to store results
+domain_results <- list()
+forest_plots <- list()
+
+for(d in valid_domains){
+  
+  df <- off_on_df %>% filter(Main_cog_domain == d)
+  
+  # Run multilevel meta-analysis
+  res <- rma.mv(
+    yi = yi,
+    V = vi,
+    random = ~1 | study_name / effect_id ,
+    method = "REML",
+    data = df
+  )
+  
+  # Store results
+  domain_results[[d]] <- tibble(
+    domain = d,
+    estimate = res$beta[1],
+    se = res$se,
+    ci.lb = res$ci.lb,
+    ci.ub = res$ci.ub,
+    pval = res$pval
+  )
+  
+  # Create forest plot
+  forest(res,
+         slab = paste(df$study_name, "-", df$`Cog Task`),
+         xlab = "Hedges' g (positive = better cognitive performance for [OFF])",
+         main = paste("\n Forest plot:", d),
+         annotate=TRUE, addfit=TRUE, 
+         showweights=TRUE, header=TRUE,
+         cex = 0.9,
+         col="white", border="firebrick",
+         colout="firebrick")
+  
+  forest_plots[[d]] <- res
+}
+
+# Combine all results
+domain_results_df <- bind_rows(domain_results)
+domain_results_df
+
+
+500
+600
+450
+450
+900
+450
+700
+
+
+library(robumeta)
+
+
+# Small-sample corrected RVE
+res_rve <- robu(
+  formula = yi ~ 1,           # intercept-only model
+  data = off_on_df,
+  studynum = study_name,        # clusters by study
+  var.eff.size = vi,          # variance of effect sizes
+  modelweights = "CORR",      # correlated effects model
+  rho = 0.6                   # assumed correlation between effect sizes within study
+)
+
+summary(res_rve)
+res_rve
+
+
+
+
+# LEAVE ON OUT CV 
+
+studies <- unique(off_on_df$study_name)
+
+loso_results <- lapply(studies, function(s) {
+  
+  res <- rma.mv(
+    yi, vi,
+    random = ~ 1 | study_name / effect_id,
+    method = "REML",
+    data = subset(off_on_df, study_name != s)
+  )
+  
+  tibble(
+    left_out = s,
+    estimate = res$beta[1],
+    se = res$se,
+    ci.lb = res$ci.lb,
+    ci.ub = res$ci.ub
+  )
+})
+
+loso_df <- bind_rows(loso_results)
+loso_df
+
+library(metafor)
+
+forest(
+  x = loso_df$estimate,
+  sei = loso_df$se,
+  slab = paste("Leave out:", loso_df$left_out),
+  xlab = "Pooled Hedges' g (Leave-One-Out)",
+  alim = c(-0.3, 0.4),
+  at = seq(-0.3, 0.4, 0.1),
+  cex = 0.8
+)
+
+
+
+
+# -----------------------------
+# OFF vs ON Main Verbal Fluency Sub Domains  ------------
+
+
+off_on_df <- final_df %>%
+  filter( (condition_A == "Off" & condition_B != "Off") ) %>% filter(!is.na(Main_Subdomain))
+
+table(off_on_df$condition_A, off_on_df$condition_B)
+
+nrow(off_on_df) # 35 contrast
+length(unique(off_on_df$study_name)) # 6 studies
+
+table(off_on_df$Main_Subdomain)
+
+
+# Identify domains with at least 2 effect sizes
+domain_counts <- table(off_on_df$Main_Subdomain)
+valid_domains <- names(domain_counts[domain_counts >= 2])
+
+# Create empty list to store results
+domain_results <- list()
+forest_plots <- list()
+
+for(d in valid_domains){
+  
+  df <- off_on_df %>% filter(Main_Subdomain == d)
+  
+  # Run multilevel meta-analysis
+  res <- rma.mv(
+    yi = yi,
+    V = vi,
+    random = ~1 | study_name / effect_id  ,
+    method = "REML",
+    data = df
+  )
+  
+  # Store results
+  domain_results[[d]] <- tibble(
+    domain = d,
+    estimate = res$beta[1],
+    se = res$se,
+    ci.lb = res$ci.lb,
+    ci.ub = res$ci.ub,
+    pval = res$pval
+  )
+  
+  # Create forest plot
+  forest(res,
+         slab = paste(df$study_name, "-", df$`Cog Task`),
+         xlab = "Hedges' g (positive = better cognitive performance for [OFF])",
+         main = paste("\n Forest plot:", d),
+         annotate=TRUE, addfit=TRUE, 
+         showweights=TRUE, header=TRUE,
+         cex = 0.9,
+         col="white", border="firebrick",
+         colout="firebrick")
+  
+  forest_plots[[d]] <- res
+}
+
+# Combine all results
+domain_results_df <- bind_rows(domain_results)
+domain_results_df
+
+
+250
+450
+500
+400
+300
+
+# -----------------------------
+# OFF vs ON Executive Function  ------------
+
+
+off_on_df <- final_df %>%
+   filter( (condition_A == "Off" & condition_B != "Off") ) %>% 
+  mutate(Main_cog_domain=ifelse(Main_cog_domain %in% c("Verbal Fluency", 
+                                                       "Working Memory", 
+                                                       "Cognitive Flexibility", 
+                                                       "Executive Control"), "Executive Function", NA)) %>%
+  filter(!is.na(Main_cog_domain))
+
+
+
+table(off_on_df$condition_A, off_on_df$condition_B)
+
+nrow(off_on_df) #61
+length(unique(off_on_df$study_name)) #16
+
+res_lh <- rma.mv(
+  yi, vi,
+  random = ~ 1 | study_name / effect_id ,
+  method = "REML",
+  test="t",
+  data = off_on_df
+)
+
+summary(res_lh)
+
+
+tau2 <- res_lh$sigma2
+I2 <- 100 * tau2 / (tau2 + mean(off_on_df$vi))
+
+tau2
+I2
+
+
+run_with_r_lh <- function(r_val) {
+  off_on_df %>%
+    rowwise() %>%
+    mutate(
+      es = list(
+        if (design_type == "within") {
+          hedges_g_within(mean_A, mean_B, sd_A, sd_B, n_A, r_val)
+        } else {
+          hedges_g_between(mean_A, mean_B, sd_A, sd_B, n_A, n_B)
+        }
+      ),
+      yi = es$g,
+      vi = es$v,
+      yi = if_else(higher_is_better=="TRUE", yi, -yi)  # flip sign
+    ) %>%
+    ungroup() %>%
+    rma.mv(
+      yi, vi,
+      random = ~ 1 |study_name / effect_id,
+      method = "REML",
+      data = .
+    )
+}
+
+summary(run_with_r_lh(0.3)) #012
+summary(run_with_r_lh(0.5)) #0.14
+summary(run_with_r_lh(0.7)) # 0.17
+
+
+meta::forest(
+  res_lh,
+  annotate=TRUE, addfit=TRUE, 
+  showweights=TRUE, header=TRUE,
+  slab = paste(off_on_df$study_name, "-", off_on_df$`Cog Task`),
+   main = paste("\n Forest plot:", "Executive Function"),
+  xlab = "Hedges' g (positive = better cognitive performance for [OFF])",
+  cex = 0.9,
+  col="white", border="firebrick",
+  colout="firebrick"
+)
+
+
+
+
+# Define a sequence of r values to test
+r_vals <- seq(0, 0.9, by = 0.1)
+
+
+# Function to compute meta-analysis for a given r
+run_with_r <- function(r_val) {
+  off_on_df %>%
+    rowwise() %>%
+    mutate(
+      es = list(
+        if (design_type == "within") {
+          hedges_g_within(mean_A, mean_B, sd_A, sd_B, n_A, r_val)
+        } else {
+          hedges_g_between(mean_A, mean_B, sd_A, sd_B, n_A, n_B)
+        }
+      ),
+      yi = es$g,
+      vi = es$v,
+      yi = if_else(higher_is_better=="TRUE", yi, -yi)   # flip sign if needed
+    ) %>%
+    ungroup() %>%
+    rma.mv(
+      yi, vi,
+      random = ~ 1 | study_name / effect_id ,
+      method = "REML",
+      data = .
+    ) %>%
+    { tibble(
+      r = r_val,
+      estimate = .$beta[1],
+      se = .$se,
+      ci.lb = .$ci.lb,
+      ci.ub = .$ci.ub
+    ) }
+}
+
+# Run the sensitivity analysis across all r values
+results <- map_df(r_vals, run_with_r)
+
+# Plot effect size vs r
+results %>%
+  ggplot(aes(x = r, y = estimate)) +
+  ylim(-0.7,0.7) +
+  geom_line(color = "deepskyblue4", size = 1) +
+  geom_ribbon(aes(ymin = ci.lb, ymax = ci.ub), alpha = 0.1, fill = "deepskyblue4") +
+  geom_hline(yintercept = 0, linetype = "dashed", colour="firebrick", size=1) +
+  labs(
+    x = "\n Assumed correlation r",
+    y = "Effect size (Hedges' g) \n",
+    title = "OFF vs ON \nSensitivity of effect size to assumed correlation r"
+  ) +
+  theme(axis.text.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        legend.position = "none") +
+  theme(panel.background = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        strip.background = element_blank(),
+        strip.text = element_blank(),
+        axis.line = element_blank(),
+        axis.text.x = element_text(size = 10),
+        axis.text.y = element_text(size = 10),
+        axis.title.x = element_text(size = 10, vjust = -0.5),
+        axis.title.y = element_text(size = 10, vjust = -0.5),
+        plot.margin = margin(5, 5, 5, 5, "pt")) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+
+
+
+library(robumeta)
+
+
+# Small-sample corrected RVE
+res_rve <- robu(
+  formula = yi ~ 1,           # intercept-only model
+  data = off_on_df,
+  studynum = study_name,        # clusters by study
+  var.eff.size = vi,          # variance of effect sizes
+  modelweights = "CORR",      # correlated effects model
+  rho = 0.6                   # assumed correlation between effect sizes within study
+)
+
+summary(res_rve)
+res_rve
+
+
+
+
+# LEAVE ON OUT CV 
+
+studies <- unique(off_on_df$study_name)
+
+loso_results <- lapply(studies, function(s) {
+  
+  res <- rma.mv(
+    yi, vi,
+    random = ~ 1 | study_name / effect_id,
+    method = "REML",
+    data = subset(off_on_df, study_name != s)
+  )
+  
+  tibble(
+    left_out = s,
+    estimate = res$beta[1],
+    se = res$se,
+    ci.lb = res$ci.lb,
+    ci.ub = res$ci.ub
+  )
+})
+
+loso_df <- bind_rows(loso_results)
+loso_df
+
+library(metafor)
+
+forest(
+  x = loso_df$estimate,
+  sei = loso_df$se,
+  slab = paste("Leave out:", loso_df$left_out),
+  xlab = "Pooled Hedges' g (Leave-One-Out)",
+  alim = c(-0.3, 0.4),
+  at = seq(-0.3, 0.4, 0.1),
+  cex = 0.8
+)
+
+
+
+
+# -----------------------------
+# OFF vs ON Secondary Domains  ------------
+
+
+off_on_df <- final_df %>%
+     filter( (condition_A == "Off" & condition_B != "Off") ) %>% filter(!is.na(Secondary_Domain))
+
+
+table(off_on_df$condition_A, off_on_df$condition_B)
+
+nrow(off_on_df) # 107 contrast
+length(unique(off_on_df$study_name)) # 11 studies
+
+table(off_on_df$Secondary_Domain)
+
+
+# Identify domains with at least 2 effect sizes
+domain_counts <- table(off_on_df$Secondary_Domain)
+valid_domains <- names(domain_counts[domain_counts >= 2])
+
+# Create empty list to store results
+domain_results <- list()
+forest_plots <- list()
+
+for(d in valid_domains){
+  
+  df <- off_on_df %>% filter(Secondary_Domain == d)
+  
+  # Run multilevel meta-analysis
+  res <- rma.mv(
+    yi = yi,
+    V = vi,
+    random = ~1 | study_name / effect_id  ,
+    method = "REML",
+    data = df
+  )
+  
+  # Store results
+  domain_results[[d]] <- tibble(
+    domain = d,
+    estimate = res$beta[1],
+    se = res$se,
+    ci.lb = res$ci.lb,
+    ci.ub = res$ci.ub,
+    pval = res$pval
+  )
+  
+  # Create forest plot
+  forest(res,
+         slab = paste(df$study_name, "-", df$`Cog Task`),
+         xlab = "Hedges' g (positive = better cognitive performance for [OFF])",
+         main = paste("\n Forest plot:", d),
+         annotate=TRUE, addfit=TRUE, 
+         showweights=TRUE, header=TRUE,
+         cex = 0.9,
+         col="white", border="firebrick",
+         colout="firebrick")
+  
+  forest_plots[[d]] <- res
+}
+
+# Combine all results
+domain_results_df <- bind_rows(domain_results)
+domain_results_df
+
+
+250
+400
+500
+350
+600
+700
+250
+450
+
+# -----------------------------
+# OFF vs ON - Any Domain Across Main+Secondary+Terteary ----------
+
+final_df_new_flags_group_paulo_jan_17 <- fread("final_df_new_flags_group_paulo_jan_17.csv")
+
+off_on_df <- final_df_new_flags_group_paulo_jan_17 %>%
+  filter( (condition_A == "Off" & condition_B != "Off") ) %>%
+  select(study_name, study_id, effect_id, yi, vi, `Cog Task`, `Verbal Fluency`:`Attention`)
+
+off_on_df <- off_on_df %>% gather(key="Domain", value="ON", `Verbal Fluency`:`Attention`) %>%
+  drop_na() %>%
+  arrange(study_name, study_id, effect_id, Domain) %>% select(-ON)
+
+
+length(unique(off_on_df$study_id)) 
+length(unique(off_on_df$study_name)) 
+
+
+table(off_on_df$Domain)
+
+
+
+# Identify domains with at least 2 effect sizes
+domain_counts <- table(off_on_df$Domain)
+valid_domains <- names(domain_counts[domain_counts >= 2])
+
+# Create empty list to store results
+domain_results <- list()
+forest_plots <- list()
+
+for(d in valid_domains){
+  
+  df <- off_on_df %>% filter(Domain == d)
+  
+  # Run multilevel meta-analysis
+  res <- rma.mv(
+    yi = yi,
+    V = vi,
+    random = ~1 | study_name / effect_id ,
+    method = "REML",
+    data = df
+  )
+  
+  # Store results
+  domain_results[[d]] <- tibble(
+    domain = d,
+    estimate = res$beta[1],
+    se = res$se,
+    ci.lb = res$ci.lb,
+    ci.ub = res$ci.ub,
+    pval = res$pval
+  )
+  
+  # Create forest plot
+  forest(res,
+         slab = paste(df$study_name, "-", df$`Cog Task`),
+         xlab = "Hedges' g (positive = better cognitive performance for [OFF])",
+         main = paste("\n Forest plot:", d),
+         annotate=TRUE, addfit=TRUE, 
+         showweights=TRUE, header=TRUE,
+         cex = 0.9,
+         col="white", border="firebrick",
+         colout="firebrick")
+  
+  forest_plots[[d]] <- res
+}
+
+# Combine all results
+domain_results_df <- bind_rows(domain_results)
+domain_results_df
+
+
+600
+800
+500
+800
+800
+800
+1200
+
+# -----------
+
+# OFF VS ON Radial plots summary horizontal -------
+
+library(dplyr)
+library(ggplot2)
+library(stringr)
+
+
+plot_df_offon_primary_naive <- tibble(
+  domain = c(
+    "Verbal Fluency (naïve)",
+    "Time Processing (naïve)",
+    "Processing Speed (naïve)",
+    "Executive Control (naïve)",
+    "Cognitive Flexibility (naïve)",
+    "Working Memory (naïve)",
+    "Attention (naïve)"
+      ),
+  g = c(-0.02, -0.17, -0.38, -0.27, 0.03, -0.13, -0.01),
+  ci_low=c(-0.12,-0.51,-0.86, -0.47, -0.14,-0.27, -0.16),
+  ci_high=c(0.08,0.16,0.10, -0.06, 0.20, 0.02, 0.41)
+)
+
+
+plot_df2 <- plot_df_offon_primary_naive %>%
+ # arrange(g) %>%
+  mutate(
+    domain_wrapped = str_wrap(domain, 20),
+    Direction = ifelse(g >= 0, "Positive [Better OFF]", "Negative [Better ON]")  )
+
+
+plt <- ggplot(plot_df2) +
+  geom_hline( aes(yintercept = y),
+    data = data.frame(y = seq(-1.0, 0.5, 0.1)[seq(-1.0, 0.5, 0.1) != 0]),
+    color = "lightgrey", linewidth = 0.4) +
+  geom_hline( yintercept = 0, color = "gray12", linewidth = 1.2) +
+  geom_col(aes(x = domain_wrapped,
+      y = g,
+      fill = Direction, alpha=0.85    ),
+    width = 0.9,
+    color = "gray20",
+    show.legend = TRUE
+  )  
+
+
+plt <- plt +
+  scale_y_continuous(
+    limits = c(-1.0, 0.5),
+    breaks = seq(-1.1, 0.5, 0.2),
+    expand = c(0, 0)
+  ) +
+  scale_fill_manual(
+    values = c(
+      "Positive [Better OFF]" = "#0c3647",
+      "Negative [Better ON]" = "#a82258"
+    )
+  ) +
+  scale_colour_manual(
+    values = c(
+      "Positive [Better OFF]" = "#0c3647",
+      "Negative [Better ON]" = "#a82258"
+    )
+  ) +
+  scale_alpha_identity() +
+  theme_minimal(base_size = 12) +
+  theme(
+    axis.title.x = element_blank(),
+    #axis.text.y = element_blank(),
+    axis.ticks = element_blank(),
+        axis.text.x = element_text(size = 9, color = "gray12", angle = 45, hjust = 1),
+    panel.grid = element_blank(),
+    legend.position = "right"
+
+  )
+
+
+plt <- plt + geom_text(aes(x = domain_wrapped,
+                    y = g + ifelse(g > 0, 0.1, -0.1), label = sprintf("%.2f", g)),
+    size = 3.5, color = "gray12")
+
+
+plt <- plt +
+  geom_segment(
+    data = plot_df2,
+    aes(
+      x = domain_wrapped,
+      xend = domain_wrapped,
+      y = ci_low,
+      yend = ci_high
+    ),
+    linewidth = 2.9,
+    color = "gray",alpha=0.4,
+    lineend = "round",
+    inherit.aes = TRUE
+  )
+
+plt
+
+
+ggsave(file="plt_offon_prim_naive.svg", plot=plt, width=8, height=5)
+
+
+
+
+
+
+
+
+
+plot_df_offon_primary_mlma <- tibble(
+  domain = c("Verbal Fluency (MLMA)",
+    "Time Processing (MLMA)",
+    "Processing Speed (MLMA)",
+    "Executive Control (MLMA)",
+    "Cognitive Flexibility (MLMA)",
+    "Working Memory (MLMA)",
+    "Attention (MLMA)"),
+   g = c(-0.02, -0.17, -0.38, -0.25, 0.03, -0.13, -0.01),
+  ci_low=c(-0.12,-0.51,-0.86, -0.54, -0.14,-0.27, -0.16),
+  ci_high=c(0.08,0.16,0.10, 0.03, 0.20, 0.02, 0.41)
+)
+
+
+
+plot_df2 <- plot_df_offon_primary_mlma %>%
+ # arrange(g) %>%
+  mutate(
+    domain_wrapped = str_wrap(domain, 20),
+    Direction = ifelse(g >= 0, "Positive [Better OFF]", "Negative [Better ON]")  )
+
+
+plt <- ggplot(plot_df2) +
+    # Light reference grid (excluding zero)
+  geom_hline(
+    aes(yintercept = y),
+    data = data.frame(y = seq(-1.0, .5, 0.1)[seq(-1.0, 0.5, 0.1) != 0]),
+    color = "lightgrey",
+    linewidth = 0.4
+  ) +
+  
+  # Emphasized zero line
+  geom_hline(
+    yintercept = 0,
+    color = "gray12",
+    linewidth = 1.2
+  ) +
+  geom_col(
+    aes(
+      x = domain_wrapped,
+      y = g,
+      fill = Direction, alpha=0.85    ),
+    width = 0.9,
+    color = "gray20",
+    show.legend = TRUE
+  )  
+
+
+plt <- plt +
+  scale_y_continuous(
+    limits = c(-1.0, 0.5),
+    breaks = seq(-1.0, 0.5, 0.2),
+    expand = c(0, 0)
+  ) +
+  scale_fill_manual(
+    values = c(
+      "Positive [Better OFF]" = "#0c3647",
+      "Negative [Better ON]" = "#a82258"
+    )
+  ) +
+  scale_colour_manual(
+    values = c(
+      "Positive [Better OFF]" = "#0c3647",
+      "Negative [Better ON]" = "#a82258"
+    )
+  ) +
+  scale_alpha_identity() +
+  theme_minimal(base_size = 12) +
+  theme(
+    axis.title.x = element_blank(),
+    #axis.text.y = element_blank(),
+    axis.ticks = element_blank(),
+       axis.text.x = element_text(size = 9, color = "gray12", angle = 45, hjust = 1),
+    panel.grid = element_blank(),
+    legend.position = "right"
+
+  )
+
+
+plt <- plt + geom_text(aes(x = domain_wrapped,
+                    y = g + ifelse(g > 0, 0.1, -0.1), label = sprintf("%.2f", g)),
+    size = 3.5, color = "gray12")
+
+
+plt <- plt +
+  geom_segment(
+    data = plot_df2,
+    aes(
+      x = domain_wrapped,
+      xend = domain_wrapped,
+      y = ci_low,
+      yend = ci_high
+    ),
+    linewidth = 2.9,
+    color = "gray",alpha=0.4,
+    lineend = "round",
+    inherit.aes = TRUE
+  )
+
+plt
+
+
+ggsave(file="plt_offon_prim_mlma.svg", plot=plt, width=8, height=5)
+
+
+
+
+
+
+
+
+
+
+plot_df_offon_sec_naive <- tibble(
+  domain = c( "Verbal Fluency (naïve)",
+    "Processing Speed (naïve)",
+    "Executive Control (naïve)",
+    "Cognitive Flexibility (naïve)",
+    "Top-down Attention (naïve)",
+    "Attention (naïve)" ,
+    "Bottom-up Attention (naïve)",
+    "Working Memory (naïve)"),
+  g = c(-0.03, 0.04, -0.14, -0.02, -0.25, -0.34, -0.77, -0.08),
+  ci_low=c(-0.20, -0.10, -1.12, -0.12, -0.42, -0.75, -2.14, -0.33),
+  ci_high=c(0.15, 0.18, 0.84,0.08,  -0.07, 0.07, 0.60, 0.18)
+)
+
+
+
+
+plot_df2 <- plot_df_offon_sec_naive %>%
+ # arrange(g) %>%
+  mutate(
+    domain_wrapped = str_wrap(domain, 20),
+    Direction = ifelse(g >= 0, "Positive [Better OFF]", "Negative [Better ON]")  )
+
+
+plt <- ggplot(plot_df2) +
+    # Light reference grid (excluding zero)
+  geom_hline(
+    aes(yintercept = y),
+    data = data.frame(y = seq(-1.0, 0.5, 0.1)[seq(-1.0, 0.5, 0.1) != 0]),
+    color = "lightgrey",
+    linewidth = 0.4
+  ) +
+  
+  # Emphasized zero line
+  geom_hline(
+    yintercept = 0,
+    color = "gray12",
+    linewidth = 1.2
+  ) +
+  geom_col(
+    aes(
+      x = domain_wrapped,
+      y = g,
+      fill = Direction, alpha=0.85    ),
+    width = 0.9,
+    color = "gray20",
+    show.legend = TRUE
+  )  
+
+
+plt <- plt +
+  scale_y_continuous(
+    breaks = seq(-1.0, 0.5, 0.2),
+    expand = c(0, 0)
+  ) +
+  coord_cartesian(
+    ylim = c(-1.0, 0.5)
+  ) +
+  scale_fill_manual(
+    values = c(
+      "Positive [Better OFF]" = "#0c3647",
+      "Negative [Better ON]" = "#a82258"
+    )
+  ) +
+  scale_colour_manual(
+    values = c(
+      "Positive [Better OFF]" = "#0c3647",
+      "Negative [Better ON]" = "#a82258"
+    )
+  ) +
+  scale_alpha_identity() +
+  theme_minimal(base_size = 12) +
+  theme(
+    axis.title.x = element_blank(),
+    #axis.text.y = element_blank(),
+    axis.ticks = element_blank(),
+        axis.text.x = element_text(size = 9, color = "gray12", angle = 45, hjust = 1),
+    panel.grid = element_blank(),
+    legend.position = "right"
+
+  )
+
+
+plt <- plt + geom_text(aes(x = domain_wrapped,
+                    y = g + ifelse(g > 0, 0.1, -0.1), label = sprintf("%.2f", g)),
+    size = 3.5, color = "gray12")
+
+
+plt <- plt +
+  geom_segment(
+    data = plot_df2,
+    aes(
+      x = domain_wrapped,
+      xend = domain_wrapped,
+      y = ci_low,
+      yend = ci_high
+    ),
+    linewidth = 2.9,
+    color = "gray",alpha=0.4,
+    lineend = "round",
+    inherit.aes = TRUE
+  )
+
+plt
+
+
+ggsave(file="plt_offon_sec_naive.svg", plot=plt, width=8, height=5)
+
+
+
+
+
+
+plot_df_offon_sec_mlma <- tibble(
+  domain =  c( "Verbal Fluency (naïve)",
+    "Processing Speed (naïve)",
+    "Executive Control (naïve)",
+    "Cognitive Flexibility (naïve)",
+    "Top-down Attention (naïve)",
+    "Attention (naïve)" ,
+    "Bottom-up Attention (naïve)",
+    "Working Memory (naïve)"),
+  g = c(-0.03, 0.04, -0.14, -0.02, -0.22, -0.34, -0.77, -0.08),
+  ci_low=c(-0.20, -0.10, -1.12, -0.12, -0.53, -0.75, -2.14, -0.33),
+  ci_high=c(0.15, 0.18, 0.84,0.08,  0.09, 0.07, 0.60, 0.18)
+)
+
+
+
+
+plot_df2 <- plot_df_offon_sec_mlma %>%
+ # arrange(g) %>%
+  mutate(
+    domain_wrapped = str_wrap(domain, 20),
+    Direction = ifelse(g >= 0, "Positive [Better OFF]", "Negative [Better ON]")  )
+
+
+plt <- ggplot(plot_df2) +
+    # Light reference grid (excluding zero)
+  geom_hline(
+    aes(yintercept = y),
+    data = data.frame(y = seq(-1.0, 0.5, 0.1)[seq(-1.0, 0.5, 0.1) != 0]),
+    color = "lightgrey",
+    linewidth = 0.4
+  ) +
+  
+  # Emphasized zero line
+  geom_hline(
+    yintercept = 0,
+    color = "gray12",
+    linewidth = 1.2
+  ) +
+  geom_col(
+    aes(
+      x = domain_wrapped,
+      y = g,
+      fill = Direction, alpha=0.85    ),
+    width = 0.9,
+    color = "gray20",
+    show.legend = TRUE
+  )  
+
+
+plt <- plt +
+  scale_y_continuous(
+    breaks = seq(-1.0, 0.5, 0.2),
+    expand = c(0, 0)
+  ) +
+  coord_cartesian(
+    ylim = c(-1.0, 0.5)
+  ) +
+  scale_fill_manual(
+    values = c(
+      "Positive [Better OFF]" = "#0c3647",
+      "Negative [Better ON]" = "#a82258"
+    )
+  ) +
+  scale_colour_manual(
+    values = c(
+      "Positive [Better OFF]" = "#0c3647",
+      "Negative [Better ON]" = "#a82258"
+    )
+  ) +
+  scale_alpha_identity() +
+  theme_minimal(base_size = 12) +
+  theme(
+    axis.title.x = element_blank(),
+    #axis.text.y = element_blank(),
+    axis.ticks = element_blank(),
+       axis.text.x = element_text(size = 9, color = "gray12", angle = 45, hjust = 1),
+    panel.grid = element_blank(),
+    legend.position = "right"
+
+  )
+
+
+plt <- plt + geom_text(aes(x = domain_wrapped,
+                    y = g + ifelse(g > 0, 0.1, -0.1), label = sprintf("%.2f", g)),
+    size = 3.5, color = "gray12")
+
+
+plt <- plt +
+  geom_segment(
+    data = plot_df2,
+    aes(
+      x = domain_wrapped,
+      xend = domain_wrapped,
+      y = ci_low,
+      yend = ci_high
+    ),
+    linewidth = 2.9,
+    color = "gray",alpha=0.4,
+    lineend = "round",
+    inherit.aes = TRUE
+  )
+
+plt
+
+
+ggsave(file="plt_offon_sec_mlma.svg", plot=plt, width=8, height=5)
+
+
+
+# -------
+
+
+
+# OFF VS ON Radial plots summary circular -------
+
+library(dplyr)
+library(ggplot2)
+library(stringr)
+
+
+plot_df_lowvlow_primary_naive <- tibble(
+  domain = c(
+    "Verbal Fluency (naïve)",
+    "Time Processing (naïve)",
+    "Processing Speed (naïve)",
+    "Executive Control (naïve)",
+    "Cognitive Flexibility (naïve)",
+    "Working Memory (naïve)",
+    "Attention (naïve)",
+    "Verbal Episodic Memory (naïve)"
+      ),
+  g = c(0.27, 0.15, -0.91, 0.18, 0.38, 0.01, 0.37, 0.27),
+  ci_low=c(0.16,-0.61,-1.58, -0.05,0.09,-0.22,0.03, 0.16),
+  ci_high=c(0.37,0.91,-0.23, 0.40,0.68,0.24,0.71, 0.37)
+)
+
+
+
+plot_df2 <- plot_df_lowvlow_primary_naive %>%
+ # arrange(g) %>%
+  mutate(
+    domain_wrapped = str_wrap(domain, 20),
+    Direction = ifelse(g >= 0, "Positive [Better Low|Very Low Hz]", "Negative [Better High Hz]")  )
+
+
+plt <- ggplot(plot_df2) + 
+  geom_hline( aes(yintercept = y), data = data.frame(y = seq(-1.8, 1.5, 0.1)[seq(-1.8, 1.5, 0.1) != 0]), color = "lightgrey", linewidth = 0.4 ) + 
+  geom_hline( yintercept = 0, color = "gray12", linewidth = 1.2 ) + 
+  geom_col( aes( x = domain_wrapped, y = g, fill = Direction, alpha=0.7 ), width = 0.9, color = "gray20", show.legend = TRUE ) + 
+  geom_segment(data = plot_df2,
+    aes(x = domain_wrapped, xend = domain_wrapped,y = ci_low,yend = ci_high),
+    linewidth = 1.9, color = "gray", alpha=0.5, inherit.aes = FALSE) + 
+  coord_polar(clip = "off") 
+plt 
+plt <- plt + scale_y_continuous( limits = c(-1.8, 1.5), breaks = seq(-1.8, 1.5, 0.1), expand = c(0, 0) ) + 
+  scale_fill_manual( values = c( "Positive [Better Low|Very Low Hz]" = "#0c3647", "Negative [Better High Hz]" = "#a82258" ) ) + 
+  scale_alpha_identity() + 
+  theme_minimal(base_size = 12) + 
+  theme( axis.title = element_blank(), 
+         axis.text.y = element_blank(),
+         axis.ticks = element_blank(), 
+         axis.text.x = element_text(size = 9, color = "gray12"), 
+         panel.grid = element_blank(), legend.position = "top" ) 
+plt 
+plt <- plt + geom_text(aes(x = domain_wrapped, y = g + ifelse(g > 0, 0.1, -0.1), label = sprintf("%.2f", g)), size = 3.5, color = "gray12") 
+plt
+
+
+
+ggsave(file="plt_lowvlow_prim_naive_circ.svg", plot=plt, width=5, height=5)
+
+
+
+
+
+
+
+plot_df_lowvlow_primary_mlma <- tibble(
+  domain = c("Verbal Fluency (MLMA)",
+    "Time Processing (MLMA)",
+    "Processing Speed (MLMA)",
+    "Executive Control (MLMA)",
+    "Cognitive Flexibility (MLMA)",
+    "Working Memory (MLMA)",
+    "Attention (MLMA)",
+    "Verbal Episodic Memory (MLMA)"),
+  g = c(0.27, -0.12, -0.67, 0.18, 0.38, 0.01, 0.25, 0.53),
+  ci_low=c(0.16, -1.69,-1.43, -0.05, 0.09, -0.22, -0.22, -0.09),
+  ci_high=c(0.37, 1.46, 0.10 , 0.40, 0.68, 0.24, 0.72, 1.15)
+)
+
+
+
+plot_df2 <- plot_df_lowvlow_primary_mlma %>%
+ # arrange(g) %>%
+  mutate(
+    domain_wrapped = str_wrap(domain, 20),
+    Direction = ifelse(g >= 0, "Positive [Better Low|Very Low Hz]", "Negative [Better High Hz]")  )
+
+
+
+plt <- ggplot(plot_df2) + 
+  geom_hline( aes(yintercept = y), data = data.frame(y = seq(-1.8, 1.5, 0.1)[seq(-1.8, 1.5, 0.1) != 0]), color = "lightgrey", linewidth = 0.4 ) + 
+  geom_hline( yintercept = 0, color = "gray12", linewidth = 1.2 ) + 
+  geom_col( aes( x = domain_wrapped, y = g, fill = Direction, alpha=0.7 ), width = 0.9, color = "gray20", show.legend = TRUE ) + 
+  geom_segment(data = plot_df2,
+    aes(x = domain_wrapped, xend = domain_wrapped,y = ci_low,yend = ci_high),
+    linewidth = 1.9, color = "gray", alpha=0.5, inherit.aes = FALSE) + 
+  coord_polar(clip = "off") 
+plt 
+plt <- plt + scale_y_continuous( limits = c(-1.8, 1.5), breaks = seq(-1.8, 1.5, 0.1), expand = c(0, 0) ) + 
+  scale_fill_manual( values = c( "Positive [Better Low|Very Low Hz]" = "#0c3647", "Negative [Better High Hz]" = "#a82258" ) ) + 
+  scale_alpha_identity() + 
+  theme_minimal(base_size = 12) + 
+  theme( axis.title = element_blank(), 
+         axis.text.y = element_blank(),
+         axis.ticks = element_blank(), 
+         axis.text.x = element_text(size = 9, color = "gray12"), 
+         panel.grid = element_blank(), legend.position = "top" ) 
+plt 
+plt <- plt + geom_text(aes(x = domain_wrapped, y = g + ifelse(g > 0, 0.1, -0.1), label = sprintf("%.2f", g)), size = 3.5, color = "gray12") 
+plt
+
+
+
+ggsave(file="plt_lowvlow_prim_mlma_circ.svg", plot=plt, width=5, height=5)
+
+
+
+
+
+
+
+
+
+
+plot_df_lowvlow_sec_naive <- tibble(
+  domain = c( "Verbal Fluency (naïve)",
+    "Processing Speed (naïve)",
+    "Executive Control (naïve)",
+    "Cognitive Flexibility (naïve)",
+    "Top-down Attention (naïve)",
+    "Attention (naïve)" ,
+    "Bottom-up Attention (naïve)"),
+  g = c(0.34, 0.25, -0.40, 0.27, 0.13, -0.50, -0.32),
+  ci_low=c(0.10, -0.07, -3.01, 0.16, -0.08, -1.38, -1.13),
+  ci_high=c(0.58, 0.57, 2.21, 0.37, 0.34, 0.38, 0.48)
+)
+
+
+
+
+
+plot_df2 <- plot_df_lowvlow_sec_naive %>%
+ # arrange(g) %>%
+  mutate(
+    domain_wrapped = str_wrap(domain, 20),
+    Direction = ifelse(g >= 0, "Positive [Better Low|Very Low Hz]", "Negative [Better High Hz]")  )
+
+plot_df2 <- plot_df2 %>% 
+  mutate(ci_high=ifelse(ci_high>=1.5,1.5,ci_high)) %>%
+  mutate(ci_low=ifelse(ci_low<=-1.8,-1.8,ci_low))
+
+plt <- ggplot(plot_df2) + 
+  geom_hline( aes(yintercept = y), data = data.frame(y = seq(-1.8, 1.5, 0.1)[seq(-1.8, 1.5, 0.1) != 0]), color = "lightgrey", linewidth = 0.4 ) + 
+  geom_hline( yintercept = 0, color = "gray12", linewidth = 1.2 ) + 
+  geom_col( aes( x = domain_wrapped, y = g, fill = Direction, alpha=0.7 ), width = 0.9, color = "gray20", show.legend = TRUE ) + 
+  geom_segment(data = plot_df2,
+    aes(x = domain_wrapped, xend = domain_wrapped,y = ci_low,yend = ci_high),
+    linewidth = 1.9, color = "gray", alpha=0.5, inherit.aes = FALSE) + 
+  coord_polar(clip = "off") 
+plt 
+plt <- plt + 
+  scale_y_continuous( limits = c(-1.8, 1.5), breaks = seq(-1.8, 1.5, 0.1), expand = c(0, 0) ) + 
+  scale_fill_manual( values = c( "Positive [Better Low|Very Low Hz]" = "#0c3647", "Negative [Better High Hz]" = "#a82258" ) ) + 
+  scale_alpha_identity() + 
+  theme_minimal(base_size = 12) + 
+  theme( axis.title = element_blank(), 
+         axis.text.y = element_blank(),
+         axis.ticks = element_blank(), 
+         axis.text.x = element_text(size = 9, color = "gray12"), 
+         panel.grid = element_blank(), legend.position = "top" ) 
+plt 
+plt <- plt + geom_text(aes(x = domain_wrapped, y = g + ifelse(g > 0, 0.1, -0.1), label = sprintf("%.2f", g)), size = 3.5, color = "gray12") 
+plt
+
+
+
+
+ggsave(file="plt_lowvlow_sec_naive_naive_circ.svg", plot=plt, width=5, height=5)
+
+
+
+
+plot_df_lowvlow_sec_mlma <- tibble(
+  domain = c("Verbal Fluency (MLMA)",
+    "Processing Speed (MLMA)",
+    "Executive Control (MLMA)",
+    "Cognitive Flexibility (MLMA)",
+    "Top-Down Attention (MLMA)",
+    "Attention (MLMA)",
+    "Bottom-up Attention (naïve)" ),
+  g = c(0.34, 0.18, -0.07, 0.27, 0.13, -0.50, -0.32),
+  ci_low=c(0.10, -0.20, -0.57, 0.16, -0.08, -1.38, -1.53),
+  ci_high=c(0.58, 0.55, 0.43, 0.37, 0.34, 0.38, 0.48)
+)
+
+
+plot_df2 <- plot_df_lowvlow_sec_mlma %>%
+ # arrange(g) %>%
+  mutate(
+    domain_wrapped = str_wrap(domain, 20),
+    Direction = ifelse(g >= 0, "Positive [Better Low|Very Low Hz]", "Negative [Better High Hz]")  )
+
+
+plt <- ggplot(plot_df2) + 
+  geom_hline( aes(yintercept = y), data = data.frame(y = seq(-1.8, 1.5, 0.1)[seq(-1.8, 1.5, 0.1) != 0]), color = "lightgrey", linewidth = 0.4 ) + 
+  geom_hline( yintercept = 0, color = "gray12", linewidth = 1.2 ) + 
+  geom_col( aes( x = domain_wrapped, y = g, fill = Direction, alpha=0.7 ), width = 0.9, color = "gray20", show.legend = TRUE ) + 
+  geom_segment(data = plot_df2,
+    aes(x = domain_wrapped, xend = domain_wrapped,y = ci_low,yend = ci_high),
+    linewidth = 1.9, color = "gray", alpha=0.5, inherit.aes = FALSE) + 
+  coord_polar(clip = "off") 
+plt 
+plt <- plt + 
+  scale_y_continuous( limits = c(-1.8, 1.5), breaks = seq(-1.8, 1.5, 0.1), expand = c(0, 0) ) + 
+  scale_fill_manual( values = c( "Positive [Better Low|Very Low Hz]" = "#0c3647", "Negative [Better High Hz]" = "#a82258" ) ) + 
+  scale_alpha_identity() + 
+  theme_minimal(base_size = 12) + 
+  theme( axis.title = element_blank(), 
+         axis.text.y = element_blank(),
+         axis.ticks = element_blank(), 
+         axis.text.x = element_text(size = 9, color = "gray12"), 
+         panel.grid = element_blank(), legend.position = "top" ) 
+plt 
+plt <- plt + geom_text(aes(x = domain_wrapped, y = g + ifelse(g > 0, 0.1, -0.1), label = sprintf("%.2f", g)), size = 3.5, color = "gray12") 
+plt
+
+
+ggsave(file="plt_lowvlow_sec_mlma_circ.svg", plot=plt, width=5, height=5)
+
+
+
+# -------
+
+
