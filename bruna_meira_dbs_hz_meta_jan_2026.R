@@ -6832,7 +6832,7 @@ library(ggplot2)
 library(stringr)
 
 
-plot_df_offon_primary_naive <- tibble(
+plot_df_offhigh_primary_naive <- tibble(
   domain = c(
     "Verbal Fluency (naïve)",
     "Time Processing (naïve)",
@@ -6842,13 +6842,13 @@ plot_df_offon_primary_naive <- tibble(
     "Working Memory (naïve)",
     "Attention (naïve)"
       ),
-  g = c(-0.02, -0.17, -0.38, -0.27, 0.03, -0.13, -0.01),
-  ci_low=c(-0.12,-0.51,-0.86, -0.47, -0.14,-0.27, -0.16),
-  ci_high=c(0.08,0.16,0.10, -0.06, 0.20, 0.02, 0.41)
+  g = c(0.16, -0.05, -0.94, -0.15, 0.21, -0.11, 0.12),
+  ci_low=c(0.01,-0.53,-1.50, -0.38, -0.02,-0.33, -0.02),
+  ci_high=c(0.30,0.42, -0.38, 0.07, 0.45, 0.11, 0.26)
 )
 
 
-plot_df2 <- plot_df_offon_primary_naive %>%
+plot_df2 <- plot_df_offhigh_primary_naive %>%
  # arrange(g) %>%
   mutate(
     domain_wrapped = str_wrap(domain, 20),
@@ -6857,7 +6857,7 @@ plot_df2 <- plot_df_offon_primary_naive %>%
 
 plt <- ggplot(plot_df2) +
   geom_hline( aes(yintercept = y),
-    data = data.frame(y = seq(-1.0, 0.5, 0.1)[seq(-1.0, 0.5, 0.1) != 0]),
+    data = data.frame(y = seq(-1.55, 0.5, 0.1)[seq(-1.55, 0.5, 0.1) != 0]),
     color = "lightgrey", linewidth = 0.4) +
   geom_hline( yintercept = 0, color = "gray12", linewidth = 1.2) +
   geom_col(aes(x = domain_wrapped,
@@ -6871,8 +6871,8 @@ plt <- ggplot(plot_df2) +
 
 plt <- plt +
   scale_y_continuous(
-    limits = c(-1.0, 0.5),
-    breaks = seq(-1.1, 0.5, 0.2),
+    limits = c(-1.55, 0.5),
+    breaks = seq(-1.55, 0.5, 0.2),
     expand = c(0, 0)
   ) +
   scale_fill_manual(
@@ -6923,7 +6923,7 @@ plt <- plt +
 plt
 
 
-ggsave(file="plt_offon_prim_naive.svg", plot=plt, width=8, height=5)
+ggsave(file="plt_offhigh_prim_naive.svg", plot=plt, width=8, height=5)
 
 
 
@@ -6933,22 +6933,24 @@ ggsave(file="plt_offon_prim_naive.svg", plot=plt, width=8, height=5)
 
 
 
-plot_df_offon_primary_mlma <- tibble(
-  domain = c("Verbal Fluency (MLMA)",
+plot_df_offhigh_primary_mlma <- tibble(
+  domain = c(
+    "Verbal Fluency (MLMA)",
     "Time Processing (MLMA)",
     "Processing Speed (MLMA)",
     "Executive Control (MLMA)",
     "Cognitive Flexibility (MLMA)",
     "Working Memory (MLMA)",
-    "Attention (MLMA)"),
-   g = c(-0.02, -0.17, -0.38, -0.25, 0.03, -0.13, -0.01),
-  ci_low=c(-0.12,-0.51,-0.86, -0.54, -0.14,-0.27, -0.16),
-  ci_high=c(0.08,0.16,0.10, 0.03, 0.20, 0.02, 0.41)
+    "Attention (MLMA)"
+      ),
+  g = c(0.16, -0.22, -0.77, -0.13, 0.21, -0.11, 0.14),
+  ci_low=c(0.01,-1.19,-1.49, -0.44, -0.02,-0.33, -0.05),
+  ci_high=c(0.30,0.75, -0.04, 0.18, 0.45, 0.11, 0.32)
 )
 
 
 
-plot_df2 <- plot_df_offon_primary_mlma %>%
+plot_df2 <- plot_df_offhigh_primary_mlma %>%
  # arrange(g) %>%
   mutate(
     domain_wrapped = str_wrap(domain, 20),
@@ -6959,7 +6961,7 @@ plt <- ggplot(plot_df2) +
     # Light reference grid (excluding zero)
   geom_hline(
     aes(yintercept = y),
-    data = data.frame(y = seq(-1.0, .5, 0.1)[seq(-1.0, 0.5, 0.1) != 0]),
+    data = data.frame(y = seq(-1.55, .5, 0.1)[seq(-1.55, 0.5, 0.1) != 0]),
     color = "lightgrey",
     linewidth = 0.4
   ) +
@@ -6983,8 +6985,8 @@ plt <- ggplot(plot_df2) +
 
 plt <- plt +
   scale_y_continuous(
-    limits = c(-1.0, 0.5),
-    breaks = seq(-1.0, 0.5, 0.2),
+    limits = c(-1.55, 0.5),
+    breaks = seq(-1.55, 0.5, 0.2),
     expand = c(0, 0)
   ) +
   scale_fill_manual(
@@ -7035,7 +7037,7 @@ plt <- plt +
 plt
 
 
-ggsave(file="plt_offon_prim_mlma.svg", plot=plt, width=8, height=5)
+ggsave(file="plt_offhigh_prim_mlma.svg", plot=plt, width=8, height=5)
 
 
 
@@ -7046,24 +7048,22 @@ ggsave(file="plt_offon_prim_mlma.svg", plot=plt, width=8, height=5)
 
 
 
-plot_df_offon_sec_naive <- tibble(
+plot_df_offhigh_sec_naive <- tibble(
   domain = c( "Verbal Fluency (naïve)",
     "Processing Speed (naïve)",
     "Executive Control (naïve)",
     "Cognitive Flexibility (naïve)",
     "Top-down Attention (naïve)",
-    "Attention (naïve)" ,
-    "Bottom-up Attention (naïve)",
-    "Working Memory (naïve)"),
-  g = c(-0.03, 0.04, -0.14, -0.02, -0.25, -0.34, -0.77, -0.08),
-  ci_low=c(-0.20, -0.10, -1.12, -0.12, -0.42, -0.75, -2.14, -0.33),
-  ci_high=c(0.15, 0.18, 0.84,0.08,  -0.07, 0.07, 0.60, 0.18)
+    "Attention (naïve)" ),
+  g = c(0.13, 0.15, -0.32, 0.16, -0.17, -0.60  ),
+  ci_low=c(-0.11, -0.04, -0.81, 0.01, -0.41, -1.47),
+  ci_high=c(0.38, 0.34, 0.16, 0.30,  0.07, 0.26)
 )
 
 
 
 
-plot_df2 <- plot_df_offon_sec_naive %>%
+plot_df2 <- plot_df_offhigh_sec_naive %>%
  # arrange(g) %>%
   mutate(
     domain_wrapped = str_wrap(domain, 20),
@@ -7074,7 +7074,7 @@ plt <- ggplot(plot_df2) +
     # Light reference grid (excluding zero)
   geom_hline(
     aes(yintercept = y),
-    data = data.frame(y = seq(-1.0, 0.5, 0.1)[seq(-1.0, 0.5, 0.1) != 0]),
+    data = data.frame(y = seq(-1.55, 0.5, 0.1)[seq(-1.55, 0.5, 0.1) != 0]),
     color = "lightgrey",
     linewidth = 0.4
   ) +
@@ -7098,11 +7098,11 @@ plt <- ggplot(plot_df2) +
 
 plt <- plt +
   scale_y_continuous(
-    breaks = seq(-1.0, 0.5, 0.2),
+    breaks = seq(-1.55, 0.5, 0.2),
     expand = c(0, 0)
   ) +
   coord_cartesian(
-    ylim = c(-1.0, 0.5)
+    ylim = c(-1.55, 0.5)
   ) +
   scale_fill_manual(
     values = c(
@@ -7152,25 +7152,23 @@ plt <- plt +
 plt
 
 
-ggsave(file="plt_offon_sec_naive.svg", plot=plt, width=8, height=5)
+ggsave(file="plt_offhigh_sec_naive.svg", plot=plt, width=8, height=5)
 
 
 
 
 
 
-plot_df_offon_sec_mlma <- tibble(
-  domain =  c( "Verbal Fluency (naïve)",
-    "Processing Speed (naïve)",
-    "Executive Control (naïve)",
-    "Cognitive Flexibility (naïve)",
-    "Top-down Attention (naïve)",
-    "Attention (naïve)" ,
-    "Bottom-up Attention (naïve)",
-    "Working Memory (naïve)"),
-  g = c(-0.03, 0.04, -0.14, -0.02, -0.22, -0.34, -0.77, -0.08),
-  ci_low=c(-0.20, -0.10, -1.12, -0.12, -0.53, -0.75, -2.14, -0.33),
-  ci_high=c(0.15, 0.18, 0.84,0.08,  0.09, 0.07, 0.60, 0.18)
+plot_df_offhigh_sec_mlma <- tibble(
+  domain = c( "Verbal Fluency (MLMA)",
+    "Processing Speed (MLMA)",
+    "Executive Control (MLMA)",
+    "Cognitive Flexibility (MLMA)",
+    "Top-down Attention (MLMA)",
+    "Attention (MLMA)" ),
+  g = c(0.13, 0.13, -0.32, 0.16, -0.16, -0.60  ),
+  ci_low=c(-0.11, -0.07, -0.81, 0.01, -0.51, -1.47),
+  ci_high=c(0.38, 0.34, 0.16, 0.30,  0.20, 0.26)
 )
 
 
@@ -7187,7 +7185,7 @@ plt <- ggplot(plot_df2) +
     # Light reference grid (excluding zero)
   geom_hline(
     aes(yintercept = y),
-    data = data.frame(y = seq(-1.0, 0.5, 0.1)[seq(-1.0, 0.5, 0.1) != 0]),
+    data = data.frame(y = seq(-1.55, 0.5, 0.1)[seq(-1.55, 0.5, 0.1) != 0]),
     color = "lightgrey",
     linewidth = 0.4
   ) +
@@ -7211,11 +7209,11 @@ plt <- ggplot(plot_df2) +
 
 plt <- plt +
   scale_y_continuous(
-    breaks = seq(-1.0, 0.5, 0.2),
+    breaks = seq(-1.55, 0.5, 0.2),
     expand = c(0, 0)
   ) +
   coord_cartesian(
-    ylim = c(-1.0, 0.5)
+    ylim = c(-1.55, 0.5)
   ) +
   scale_fill_manual(
     values = c(
@@ -7265,7 +7263,7 @@ plt <- plt +
 plt
 
 
-ggsave(file="plt_offon_sec_mlma.svg", plot=plt, width=8, height=5)
+ggsave(file="plt_offhigh_sec_mlma.svg", plot=plt, width=8, height=5)
 
 
 
@@ -7280,7 +7278,9 @@ library(ggplot2)
 library(stringr)
 
 
-plot_df_lowvlow_primary_naive <- tibble(
+
+
+plot_df_offhigh_primary_naive <- tibble(
   domain = c(
     "Verbal Fluency (naïve)",
     "Time Processing (naïve)",
@@ -7288,25 +7288,24 @@ plot_df_lowvlow_primary_naive <- tibble(
     "Executive Control (naïve)",
     "Cognitive Flexibility (naïve)",
     "Working Memory (naïve)",
-    "Attention (naïve)",
-    "Verbal Episodic Memory (naïve)"
+    "Attention (naïve)"
       ),
-  g = c(0.27, 0.15, -0.91, 0.18, 0.38, 0.01, 0.37, 0.27),
-  ci_low=c(0.16,-0.61,-1.58, -0.05,0.09,-0.22,0.03, 0.16),
-  ci_high=c(0.37,0.91,-0.23, 0.40,0.68,0.24,0.71, 0.37)
+  g = c(0.16, -0.05, -0.94, -0.15, 0.21, -0.11, 0.12),
+  ci_low=c(0.01,-0.53,-1.50, -0.38, -0.02,-0.33, -0.02),
+  ci_high=c(0.30,0.42, -0.38, 0.07, 0.45, 0.11, 0.26)
 )
 
 
 
-plot_df2 <- plot_df_lowvlow_primary_naive %>%
+plot_df2 <- plot_df_offhigh_primary_naive %>%
  # arrange(g) %>%
   mutate(
     domain_wrapped = str_wrap(domain, 20),
-    Direction = ifelse(g >= 0, "Positive [Better Low|Very Low Hz]", "Negative [Better High Hz]")  )
+    Direction = ifelse(g >= 0, "Positive [Better OFF]", "Negative [Better ON]")  )
 
 
 plt <- ggplot(plot_df2) + 
-  geom_hline( aes(yintercept = y), data = data.frame(y = seq(-1.8, 1.5, 0.1)[seq(-1.8, 1.5, 0.1) != 0]), color = "lightgrey", linewidth = 0.4 ) + 
+  geom_hline( aes(yintercept = y), data = data.frame(y = seq(-1.55, 0.5, 0.1)[seq(-1.55, 0.5, 0.1) != 0]), color = "lightgrey", linewidth = 0.4 ) + 
   geom_hline( yintercept = 0, color = "gray12", linewidth = 1.2 ) + 
   geom_col( aes( x = domain_wrapped, y = g, fill = Direction, alpha=0.7 ), width = 0.9, color = "gray20", show.legend = TRUE ) + 
   geom_segment(data = plot_df2,
@@ -7314,8 +7313,8 @@ plt <- ggplot(plot_df2) +
     linewidth = 1.9, color = "gray", alpha=0.5, inherit.aes = FALSE) + 
   coord_polar(clip = "off") 
 plt 
-plt <- plt + scale_y_continuous( limits = c(-1.8, 1.5), breaks = seq(-1.8, 1.5, 0.1), expand = c(0, 0) ) + 
-  scale_fill_manual( values = c( "Positive [Better Low|Very Low Hz]" = "#0c3647", "Negative [Better High Hz]" = "#a82258" ) ) + 
+plt <- plt + scale_y_continuous( limits = c(-1.55, 0.5), breaks = seq(-1.55, 0.5, 0.1), expand = c(0, 0) ) + 
+  scale_fill_manual( values = c( "Positive [Better OFF]" = "#0c3647", "Negative [Better ON]" = "#a82258" ) ) + 
   scale_alpha_identity() + 
   theme_minimal(base_size = 12) + 
   theme( axis.title = element_blank(), 
@@ -7329,7 +7328,7 @@ plt
 
 
 
-ggsave(file="plt_lowvlow_prim_naive_circ.svg", plot=plt, width=5, height=5)
+ggsave(file="plt_offhigh_prim_naive_circ.svg", plot=plt, width=5, height=5)
 
 
 
@@ -7337,32 +7336,33 @@ ggsave(file="plt_lowvlow_prim_naive_circ.svg", plot=plt, width=5, height=5)
 
 
 
-plot_df_lowvlow_primary_mlma <- tibble(
-  domain = c("Verbal Fluency (MLMA)",
+
+plot_df_offhigh_primary_mlma <- tibble(
+  domain = c(
+    "Verbal Fluency (MLMA)",
     "Time Processing (MLMA)",
     "Processing Speed (MLMA)",
     "Executive Control (MLMA)",
     "Cognitive Flexibility (MLMA)",
     "Working Memory (MLMA)",
-    "Attention (MLMA)",
-    "Verbal Episodic Memory (MLMA)"),
-  g = c(0.27, -0.12, -0.67, 0.18, 0.38, 0.01, 0.25, 0.53),
-  ci_low=c(0.16, -1.69,-1.43, -0.05, 0.09, -0.22, -0.22, -0.09),
-  ci_high=c(0.37, 1.46, 0.10 , 0.40, 0.68, 0.24, 0.72, 1.15)
+    "Attention (MLMA)"
+      ),
+  g = c(0.16, -0.22, -0.77, -0.13, 0.21, -0.11, 0.14),
+  ci_low=c(0.01,-1.19,-1.49, -0.44, -0.02,-0.33, -0.05),
+  ci_high=c(0.30,0.75, -0.04, 0.18, 0.45, 0.11, 0.32)
 )
 
 
-
-plot_df2 <- plot_df_lowvlow_primary_mlma %>%
+plot_df2 <- plot_df_offhigh_primary_mlma %>%
  # arrange(g) %>%
   mutate(
     domain_wrapped = str_wrap(domain, 20),
-    Direction = ifelse(g >= 0, "Positive [Better Low|Very Low Hz]", "Negative [Better High Hz]")  )
+    Direction = ifelse(g >= 0, "Positive [Better OFF]", "Negative [Better ON]")  )
 
 
 
 plt <- ggplot(plot_df2) + 
-  geom_hline( aes(yintercept = y), data = data.frame(y = seq(-1.8, 1.5, 0.1)[seq(-1.8, 1.5, 0.1) != 0]), color = "lightgrey", linewidth = 0.4 ) + 
+  geom_hline( aes(yintercept = y), data = data.frame(y = seq(-1.55, 0.5, 0.1)[seq(-1.55, 0.5, 0.1) != 0]), color = "lightgrey", linewidth = 0.4 ) + 
   geom_hline( yintercept = 0, color = "gray12", linewidth = 1.2 ) + 
   geom_col( aes( x = domain_wrapped, y = g, fill = Direction, alpha=0.7 ), width = 0.9, color = "gray20", show.legend = TRUE ) + 
   geom_segment(data = plot_df2,
@@ -7370,8 +7370,8 @@ plt <- ggplot(plot_df2) +
     linewidth = 1.9, color = "gray", alpha=0.5, inherit.aes = FALSE) + 
   coord_polar(clip = "off") 
 plt 
-plt <- plt + scale_y_continuous( limits = c(-1.8, 1.5), breaks = seq(-1.8, 1.5, 0.1), expand = c(0, 0) ) + 
-  scale_fill_manual( values = c( "Positive [Better Low|Very Low Hz]" = "#0c3647", "Negative [Better High Hz]" = "#a82258" ) ) + 
+plt <- plt + scale_y_continuous( limits = c(-1.55, 0.5), breaks = seq(-1.55, 0.5, 0.1), expand = c(0, 0) ) + 
+  scale_fill_manual( values = c( "Positive [Better OFF]" = "#0c3647", "Negative [Better ON]" = "#a82258" ) ) + 
   scale_alpha_identity() + 
   theme_minimal(base_size = 12) + 
   theme( axis.title = element_blank(), 
@@ -7385,7 +7385,7 @@ plt
 
 
 
-ggsave(file="plt_lowvlow_prim_mlma_circ.svg", plot=plt, width=5, height=5)
+ggsave(file="plt_offhigh_prim_mlma_circ.svg", plot=plt, width=5, height=5)
 
 
 
@@ -7396,35 +7396,31 @@ ggsave(file="plt_lowvlow_prim_mlma_circ.svg", plot=plt, width=5, height=5)
 
 
 
-plot_df_lowvlow_sec_naive <- tibble(
+
+plot_df_offhigh_sec_naive <- tibble(
   domain = c( "Verbal Fluency (naïve)",
     "Processing Speed (naïve)",
     "Executive Control (naïve)",
     "Cognitive Flexibility (naïve)",
     "Top-down Attention (naïve)",
-    "Attention (naïve)" ,
-    "Bottom-up Attention (naïve)"),
-  g = c(0.34, 0.25, -0.40, 0.27, 0.13, -0.50, -0.32),
-  ci_low=c(0.10, -0.07, -3.01, 0.16, -0.08, -1.38, -1.13),
-  ci_high=c(0.58, 0.57, 2.21, 0.37, 0.34, 0.38, 0.48)
+    "Attention (naïve)" ),
+  g = c(0.13, 0.15, -0.32, 0.16, -0.17, -0.60  ),
+  ci_low=c(-0.11, -0.04, -0.81, 0.01, -0.41, -1.47),
+  ci_high=c(0.38, 0.34, 0.16, 0.30,  0.07, 0.26)
 )
 
 
 
 
-
-plot_df2 <- plot_df_lowvlow_sec_naive %>%
+plot_df2 <- plot_df_offhigh_sec_naive %>%
  # arrange(g) %>%
   mutate(
     domain_wrapped = str_wrap(domain, 20),
-    Direction = ifelse(g >= 0, "Positive [Better Low|Very Low Hz]", "Negative [Better High Hz]")  )
+    Direction = ifelse(g >= 0, "Positive [Better OFF]", "Negative [Better ON]")  )
 
-plot_df2 <- plot_df2 %>% 
-  mutate(ci_high=ifelse(ci_high>=1.5,1.5,ci_high)) %>%
-  mutate(ci_low=ifelse(ci_low<=-1.8,-1.8,ci_low))
 
 plt <- ggplot(plot_df2) + 
-  geom_hline( aes(yintercept = y), data = data.frame(y = seq(-1.8, 1.5, 0.1)[seq(-1.8, 1.5, 0.1) != 0]), color = "lightgrey", linewidth = 0.4 ) + 
+  geom_hline( aes(yintercept = y), data = data.frame(y = seq(-1.55, 0.5, 0.1)[seq(-1.55, 0.5, 0.1) != 0]), color = "lightgrey", linewidth = 0.4 ) + 
   geom_hline( yintercept = 0, color = "gray12", linewidth = 1.2 ) + 
   geom_col( aes( x = domain_wrapped, y = g, fill = Direction, alpha=0.7 ), width = 0.9, color = "gray20", show.legend = TRUE ) + 
   geom_segment(data = plot_df2,
@@ -7433,8 +7429,8 @@ plt <- ggplot(plot_df2) +
   coord_polar(clip = "off") 
 plt 
 plt <- plt + 
-  scale_y_continuous( limits = c(-1.8, 1.5), breaks = seq(-1.8, 1.5, 0.1), expand = c(0, 0) ) + 
-  scale_fill_manual( values = c( "Positive [Better Low|Very Low Hz]" = "#0c3647", "Negative [Better High Hz]" = "#a82258" ) ) + 
+  scale_y_continuous( limits = c(-1.55, 0.5), breaks = seq(-1.55, 0.5, 0.1), expand = c(0, 0) ) + 
+  scale_fill_manual( values = c( "Positive [Better OFF]" = "#0c3647", "Negative [Better ON]" = "#a82258" ) ) + 
   scale_alpha_identity() + 
   theme_minimal(base_size = 12) + 
   theme( axis.title = element_blank(), 
@@ -7449,34 +7445,35 @@ plt
 
 
 
-ggsave(file="plt_lowvlow_sec_naive_naive_circ.svg", plot=plt, width=5, height=5)
+ggsave(file="plt_offhigh_sec_naive_naive_circ.svg", plot=plt, width=5, height=5)
 
 
 
 
-plot_df_lowvlow_sec_mlma <- tibble(
-  domain = c("Verbal Fluency (MLMA)",
+plot_df_offhigh_sec_mlma <- tibble(
+  domain = c( "Verbal Fluency (MLMA)",
     "Processing Speed (MLMA)",
     "Executive Control (MLMA)",
     "Cognitive Flexibility (MLMA)",
-    "Top-Down Attention (MLMA)",
-    "Attention (MLMA)",
-    "Bottom-up Attention (naïve)" ),
-  g = c(0.34, 0.18, -0.07, 0.27, 0.13, -0.50, -0.32),
-  ci_low=c(0.10, -0.20, -0.57, 0.16, -0.08, -1.38, -1.53),
-  ci_high=c(0.58, 0.55, 0.43, 0.37, 0.34, 0.38, 0.48)
+    "Top-down Attention (MLMA)",
+    "Attention (MLMA)" ),
+  g = c(0.13, 0.13, -0.32, 0.16, -0.16, -0.60  ),
+  ci_low=c(-0.11, -0.07, -0.81, 0.01, -0.51, -1.47),
+  ci_high=c(0.38, 0.34, 0.16, 0.30,  0.20, 0.26)
 )
 
 
-plot_df2 <- plot_df_lowvlow_sec_mlma %>%
+
+
+plot_df2 <- plot_df_offhigh_sec_mlma %>%
  # arrange(g) %>%
   mutate(
     domain_wrapped = str_wrap(domain, 20),
-    Direction = ifelse(g >= 0, "Positive [Better Low|Very Low Hz]", "Negative [Better High Hz]")  )
+    Direction = ifelse(g >= 0, "Positive [Better OFF]", "Negative [Better ON]")  )
 
 
 plt <- ggplot(plot_df2) + 
-  geom_hline( aes(yintercept = y), data = data.frame(y = seq(-1.8, 1.5, 0.1)[seq(-1.8, 1.5, 0.1) != 0]), color = "lightgrey", linewidth = 0.4 ) + 
+  geom_hline( aes(yintercept = y), data = data.frame(y = seq(-1.55, 0.5, 0.1)[seq(-1.55, 0.5, 0.1) != 0]), color = "lightgrey", linewidth = 0.4 ) + 
   geom_hline( yintercept = 0, color = "gray12", linewidth = 1.2 ) + 
   geom_col( aes( x = domain_wrapped, y = g, fill = Direction, alpha=0.7 ), width = 0.9, color = "gray20", show.legend = TRUE ) + 
   geom_segment(data = plot_df2,
@@ -7485,8 +7482,8 @@ plt <- ggplot(plot_df2) +
   coord_polar(clip = "off") 
 plt 
 plt <- plt + 
-  scale_y_continuous( limits = c(-1.8, 1.5), breaks = seq(-1.8, 1.5, 0.1), expand = c(0, 0) ) + 
-  scale_fill_manual( values = c( "Positive [Better Low|Very Low Hz]" = "#0c3647", "Negative [Better High Hz]" = "#a82258" ) ) + 
+  scale_y_continuous( limits = c(-1.55, 0.5), breaks = seq(-1.55, 0.5, 0.1), expand = c(0, 0) ) + 
+  scale_fill_manual( values = c( "Positive [Better OFF]" = "#0c3647", "Negative [Better ON]" = "#a82258" ) ) + 
   scale_alpha_identity() + 
   theme_minimal(base_size = 12) + 
   theme( axis.title = element_blank(), 
@@ -7499,7 +7496,7 @@ plt <- plt + geom_text(aes(x = domain_wrapped, y = g + ifelse(g > 0, 0.1, -0.1),
 plt
 
 
-ggsave(file="plt_lowvlow_sec_mlma_circ.svg", plot=plt, width=5, height=5)
+ggsave(file="plt_offhigh_sec_mlma_circ.svg", plot=plt, width=5, height=5)
 
 
 
