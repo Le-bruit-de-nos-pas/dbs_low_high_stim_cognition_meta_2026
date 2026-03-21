@@ -9578,3 +9578,2141 @@ ggsave(file="plt_lowvlow_prim_sec_tert_mlma.svg", plot=plt, width=8, height=5)
 
 
 # ---------
+# LOW|VERY LOW vs HIGH Data pre-processing Verbal Fluency AND Cogn Fluex Extra Checks  -------------------------
+
+final_df <- read_excel("LFS.HFS.toanalyse.new.xlsx", sheet = "Folha1")
+
+names(final_df)
+
+length(unique(final_df$study_name)) # 22
+
+final_df %>% select(study_name, design) %>% distinct() %>% count() # 23
+
+unique(final_df$contrast)
+
+assumed_r <- 0.5 
+
+unique(final_df$design)
+
+final_df <- final_df %>%
+  mutate(
+    design_type = if_else(
+      grepl("Within", design, ignore.case = TRUE),
+      "within",
+      "between"
+    )
+  )
+
+# Within-subject Hedges g (small sample correct SMD)
+
+hedges_g_within <- function(m1, m2, sd1, sd2, n, r) {
+  sd_diff <- sqrt(sd1^2 + sd2^2 - 2*r*sd1*sd2)
+  dz <- (m1 - m2) / sd_diff
+  J <- 1 - (3 / (4*n - 1))
+  g <- dz * J
+  var_g <- (1/n) + (g^2 / (2*n))
+  list(g = g, v = var_g)
+}
+
+
+# Between-subject Hedges g
+hedges_g_between <- function(m1, m2, sd1, sd2, n1, n2) {
+  s_pooled <- sqrt(
+    ((n1 - 1)*sd1^2 + (n2 - 1)*sd2^2) / (n1 + n2 - 2)
+  )
+  d <- (m1 - m2) / s_pooled
+  J <- 1 - (3 / (4*(n1 + n2) - 9))
+  g <- d * J
+  var_g <- (n1 + n2)/(n1*n2) + (g^2/(2*(n1 + n2)))
+  list(g = g, v = var_g)
+}
+
+
+
+final_df <- final_df %>%
+  mutate(
+    mean_A = as.numeric(mean_A),
+    mean_B = as.numeric(mean_B),
+    sd_A   = as.numeric(sd_A),
+    sd_B   = as.numeric(sd_B),
+    n_A    = as.numeric(n_A),
+    n_B    = as.numeric(n_B)
+  )
+
+
+final_df <- final_df %>%
+  rowwise() %>%
+  mutate(
+    es = list(
+      if (design_type == "within") {
+        hedges_g_within(
+          mean_A, mean_B,
+          sd_A, sd_B,
+          n_A,
+          assumed_r
+        )
+      } else {
+        hedges_g_between(
+          mean_A, mean_B,
+          sd_A, sd_B,
+          n_A, n_B
+        )
+      }
+    ),
+    yi = es$g,
+    vi = es$v
+  ) %>%
+  ungroup() %>%
+  select(-es)
+
+
+
+# SMD/hedges_g sign correction
+
+
+final_df <- final_df %>%
+  mutate(
+    yi = if_else(higher_is_better=="TRUE", yi, -yi)
+  )
+
+
+summary(final_df$yi)
+summary(final_df$vi)
+
+
+# How to treat the nested structure
+# Use study_id to treat all contrasts as independendt, study_name as dependent
+
+final_df <- final_df %>%
+  mutate(
+    study_id = as.factor(study_id),
+    effect_id = row_number()
+  )
+
+
+# final_df <- final_df %>%
+#   group_by(study_name) %>%         # group by study
+#   mutate(effect_id = row_number()) %>%  # effect_id unique within study
+#   ungroup() %>%
+#   mutate(study_name = as.factor(study_name),
+#          effect_id = as.factor(effect_id))
+
+
+#fwrite(final_df, "final_df_new.csv")
+
+
+# ----------------
+
+# LOW|VERY LOW vs HIGH Verbal Fluency AND Cogn Fluex Extra Checks  ------------
+
+low_high_df <- final_df %>%
+  filter(
+    (condition_A == "LowHz" & condition_B == "HighHz") |
+      (condition_A == "VeryLowHz" & condition_B == "HighHz")
+  )
+
+
+# Define a sequence of r values to test
+r_vals <- seq(0, 0.9, by = 0.1)
+
+
+#df <- low_high_df %>% filter(Main_cog_domain=="Verbal Fluency")
+ df <- low_high_df %>% filter(Main_cog_domain=="Cognitive Flexibility")
+
+# Function to compute meta-analysis for a given r
+run_with_r <- function(r_val) {
+  df %>%
+    rowwise() %>%
+    mutate(
+      es = list(
+        if (design_type == "within") {
+          hedges_g_within(mean_A, mean_B, sd_A, sd_B, n_A, r_val)
+        } else {
+          hedges_g_between(mean_A, mean_B, sd_A, sd_B, n_A, n_B)
+        }
+      ),
+      yi = es$g,
+      vi = es$v,
+      yi = if_else(higher_is_better=="TRUE", yi, -yi)   # flip sign if needed
+    ) %>%
+    ungroup() %>%
+    rma.mv(
+      yi, vi,
+      random = ~ 1 | effect_id ,
+      method = "REML",
+      data = .
+    ) %>%
+    { tibble(
+      r = r_val,
+      estimate = .$beta[1],
+      se = .$se,
+      ci.lb = .$ci.lb,
+      ci.ub = .$ci.ub
+    ) }
+}
+
+# Run the sensitivity analysis across all r values
+results <- map_df(r_vals, run_with_r)
+
+
+# Plot effect size vs r
+results %>%
+  ggplot(aes(x = r, y = estimate)) +
+  ylim(-1,1) +
+  geom_line(color = "deepskyblue4", size = 1) +
+  geom_ribbon(aes(ymin = ci.lb, ymax = ci.ub), alpha = 0.1, fill = "deepskyblue4") +
+  geom_hline(yintercept = 0, linetype = "dashed", colour="firebrick", size=1) +
+  labs(
+    x = "\n Assumed correlation r",
+    y = "Effect size (Hedges' g) \n",
+    title = "Low|Very Low Hz vs High Hz: [Cognitive Flexibility] \nSensitivity of effect size to assumed correlation r"
+  ) +
+  theme(axis.text.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        legend.position = "none") +
+  theme(panel.background = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        strip.background = element_blank(),
+        strip.text = element_blank(),
+        axis.line = element_blank(),
+        axis.text.x = element_text(size = 10),
+        axis.text.y = element_text(size = 10),
+        axis.title.x = element_text(size = 10, vjust = -0.5),
+        axis.title.y = element_text(size = 10, vjust = -0.5),
+        plot.margin = margin(5, 5, 5, 5, "pt")) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+
+
+
+
+
+
+
+
+# LEAVE ON OUT CV 
+
+df <- low_high_df %>% filter(Main_cog_domain=="Verbal Fluency")
+#df <- low_high_df %>% filter(Main_cog_domain=="Cognitive Flexibility")
+
+ 
+studies <- unique(df$study_name)
+
+
+loso_results <- lapply(studies, function(s) {
+  
+  res <- rma.mv(
+    yi, vi,
+    random = ~ 1 | study_name / effect_id,
+    method = "REML",
+    data = subset(df, study_name != s)
+  )
+  
+  tibble(
+    left_out = s,
+    estimate = res$beta[1],
+    se = res$se,
+    ci.lb = res$ci.lb,
+    ci.ub = res$ci.ub
+  )
+})
+
+loso_df <- bind_rows(loso_results)
+loso_df
+
+library(metafor)
+
+forest(
+  x = loso_df$estimate,
+  sei = loso_df$se,
+  slab = paste("Leave out:", loso_df$left_out),
+  xlab = "Pooled Hedges' g (Leave-One-Out)",
+  alim = c(0.0, 0.8),
+  at = seq(0.0, 0.8, 0.2),
+  cex = 0.8
+)
+
+
+
+# Filter for your two domains
+domains <- c("Verbal Fluency", "Cognitive Flexibility")
+
+domain_med_df <- low_high_df %>% 
+  filter(Main_cog_domain %in% domains)
+
+# Check medication status distribution by domain
+cat("Medication status by domain:\n")
+table(domain_med_df$Main_cog_domain, domain_med_df$med_state)
+
+cat("\nMedication status by study within domains:\n")
+print(table(domain_med_df$Main_cog_domain, domain_med_df$study_name, domain_med_df$med_state))
+
+
+
+
+
+# APPROACH 3: Robust Variance Estimation (RVE)
+
+# Run RVE models for each domain
+rve_results <- list()
+
+
+
+library(robumeta)
+
+for(d in domains) {
+  cat("\n========== RVE for ", d, " ==========\n")
+  df_domain <- domain_med_df %>% filter(Main_cog_domain == d)
+  
+  # Check if both medication states are present
+  if(length(unique(df_domain$med_state)) < 2) {
+    cat("Only one medication state present. Skipping RVE.\n")
+    next
+  }
+  
+  # Run RVE with small-sample corrections
+  res_rve <- robu(
+    yi ~ med_state,
+    data = df_domain,
+    studynum = effect_id,
+    var.eff.size = vi,
+    modelweights = "CORR",
+    rho = 0.6
+  )
+  
+  print(res_rve)
+  rve_results[[d]] <- res_rve
+}
+
+
+
+
+
+
+# CREATE COMPREHENSIVE VISUALIZATION
+
+# Extract results for plotting
+extract_rve_results <- function(rve_obj, domain_name) {
+  # Get the coefficient table
+  coef_table <- as.data.frame(rve_obj$reg_table)
+  
+  # For intercept (Off medication effect)
+  off_effect <- tibble(
+    domain = domain_name,
+    medication = "Off",
+    estimate = coef_table$b[1],
+    se = coef_table$SE[1],
+    ci.lb = coef_table$CI.L[1],
+    ci.ub = coef_table$CI.U[1],
+    pval = coef_table$prob[1],
+    df = coef_table$dfs[1]
+  )
+  
+  # For On medication effect (intercept + med_stateOn)
+  on_effect <- tibble(
+    domain = domain_name,
+    medication = "On",
+    estimate = coef_table$b[1] + coef_table$b[2],
+    se = sqrt(coef_table$SE[1]^2 + coef_table$SE[2]^2),  # Approximate SE for sum
+    ci.lb = (coef_table$b[1] + coef_table$b[2]) - 1.96 * sqrt(coef_table$SE[1]^2 + coef_table$SE[2]^2),
+    ci.ub = (coef_table$b[1] + coef_table$b[2]) + 1.96 * sqrt(coef_table$SE[1]^2 + coef_table$SE[2]^2),
+    pval = coef_table$prob[2],  # p-value for the difference
+    df = coef_table$dfs[2]
+  )
+  
+  # Difference between On and Off
+  diff_effect <- tibble(
+    domain = domain_name,
+    medication = "Difference (On - Off)",
+    estimate = coef_table$b[2],
+    se = coef_table$SE[2],
+    ci.lb = coef_table$CI.L[2],
+    ci.ub = coef_table$CI.U[2],
+    pval = coef_table$prob[2],
+    df = coef_table$dfs[2]
+  )
+  
+  # Get heterogeneity info
+  het_info <- tibble(
+    domain = domain_name,
+    I2 = rve_obj$I2,
+    tau2 = rve_obj$tau.sq
+  )
+  
+  return(list(
+    off = off_effect,
+    on = on_effect,
+    diff = diff_effect,
+    het = het_info
+  ))
+}
+
+# Extract results for both domains
+verbal_results <- extract_rve_results(rve_results[["Verbal Fluency"]], "Verbal Fluency")
+flex_results <- extract_rve_results(rve_results[["Cognitive Flexibility"]], "Cognitive Flexibility")
+
+# Combine for plotting
+medication_effects <- bind_rows(
+  verbal_results$off,
+  verbal_results$on,
+  verbal_results$diff,
+  flex_results$off,
+  flex_results$on,
+  flex_results$diff
+)
+
+# -----------------------------
+# LOW vs HIGH Verbal Fluency AND Cogn Fluex Extra Checks ------------
+
+low_high_df <- final_df %>%
+  filter(
+    (condition_A == "LowHz" & condition_B == "HighHz") |
+      (condition_A == "HighHz" & condition_B == "LowHz")
+  )
+
+
+
+# Define a sequence of r values to test
+r_vals <- seq(0, 0.9, by = 0.1)
+
+
+df <- low_high_df %>% filter(Main_cog_domain=="Verbal Fluency")
+
+# Function to compute meta-analysis for a given r
+run_with_r <- function(r_val) {
+  df %>%
+    rowwise() %>%
+    mutate(
+      es = list(
+        if (design_type == "within") {
+          hedges_g_within(mean_A, mean_B, sd_A, sd_B, n_A, r_val)
+        } else {
+          hedges_g_between(mean_A, mean_B, sd_A, sd_B, n_A, n_B)
+        }
+      ),
+      yi = es$g,
+      vi = es$v,
+      yi = if_else(higher_is_better=="TRUE", yi, -yi)   # flip sign if needed
+    ) %>%
+    ungroup() %>%
+    rma.mv(
+      yi, vi,
+      random = ~ 1 | effect_id ,
+      method = "REML",
+      data = .
+    ) %>%
+    { tibble(
+      r = r_val,
+      estimate = .$beta[1],
+      se = .$se,
+      ci.lb = .$ci.lb,
+      ci.ub = .$ci.ub
+    ) }
+}
+
+# Run the sensitivity analysis across all r values
+results <- map_df(r_vals, run_with_r)
+
+
+# Plot effect size vs r
+results %>%
+  ggplot(aes(x = r, y = estimate)) +
+  ylim(-0.6,0.6) +
+  geom_line(color = "deepskyblue4", size = 1) +
+  geom_ribbon(aes(ymin = ci.lb, ymax = ci.ub), alpha = 0.1, fill = "deepskyblue4") +
+  geom_hline(yintercept = 0, linetype = "dashed", colour="firebrick", size=1) +
+  labs(
+    x = "\n Assumed correlation r",
+    y = "Effect size (Hedges' g) \n",
+    title = "Low Hz vs High Hz: [Verbal Fluency] \nSensitivity of effect size to assumed correlation r"
+  ) +
+  theme(axis.text.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        legend.position = "none") +
+  theme(panel.background = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        strip.background = element_blank(),
+        strip.text = element_blank(),
+        axis.line = element_blank(),
+        axis.text.x = element_text(size = 10),
+        axis.text.y = element_text(size = 10),
+        axis.title.x = element_text(size = 10, vjust = -0.5),
+        axis.title.y = element_text(size = 10, vjust = -0.5),
+        plot.margin = margin(5, 5, 5, 5, "pt")) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+
+
+
+
+
+
+
+
+# LEAVE ON OUT CV 
+
+df <- low_high_df %>% filter(Main_cog_domain=="Verbal Fluency")
+
+ 
+studies <- unique(df$study_name)
+
+
+loso_results <- lapply(studies, function(s) {
+  
+  res <- rma.mv(
+    yi, vi,
+    random = ~ 1 | study_name / effect_id,
+    method = "REML",
+    data = subset(df, study_name != s)
+  )
+  
+  tibble(
+    left_out = s,
+    estimate = res$beta[1],
+    se = res$se,
+    ci.lb = res$ci.lb,
+    ci.ub = res$ci.ub
+  )
+})
+
+loso_df <- bind_rows(loso_results)
+loso_df
+
+library(metafor)
+
+forest(
+  x = loso_df$estimate,
+  sei = loso_df$se,
+  slab = paste("Leave out:", loso_df$left_out),
+  xlab = "Pooled Hedges' g (Leave-One-Out)",
+  alim = c(-0.2, 0.6),
+  at = seq(-0.2, 0.6, 0.2),
+  cex = 0.8
+)
+
+
+
+# Filter for your two domains
+domains <- c("Verbal Fluency")
+
+domain_med_df <- low_high_df %>% 
+  filter(Main_cog_domain %in% domains)
+
+# Check medication status distribution by domain
+cat("Medication status by domain:\n")
+table(domain_med_df$Main_cog_domain, domain_med_df$med_state)
+
+cat("\nMedication status by study within domains:\n")
+print(table(domain_med_df$Main_cog_domain, domain_med_df$study_name, domain_med_df$med_state))
+
+
+
+
+
+# APPROACH 3: Robust Variance Estimation (RVE)
+
+# Run RVE models for each domain
+rve_results <- list()
+
+
+
+library(robumeta)
+
+for(d in domains) {
+  cat("\n========== RVE for ", d, " ==========\n")
+  df_domain <- domain_med_df %>% filter(Main_cog_domain == d)
+  
+  # Check if both medication states are present
+  if(length(unique(df_domain$med_state)) < 2) {
+    cat("Only one medication state present. Skipping RVE.\n")
+    next
+  }
+  
+  # Run RVE with small-sample corrections
+  res_rve <- robu(
+    yi ~ med_state,
+    data = df_domain,
+    studynum = effect_id,
+    var.eff.size = vi,
+    modelweights = "CORR",
+    rho = 0.6
+  )
+  
+  print(res_rve)
+  rve_results[[d]] <- res_rve
+}
+
+
+
+
+
+
+# CREATE COMPREHENSIVE VISUALIZATION
+
+# Extract results for plotting
+extract_rve_results <- function(rve_obj, domain_name) {
+  # Get the coefficient table
+  coef_table <- as.data.frame(rve_obj$reg_table)
+  
+  # For intercept (Off medication effect)
+  off_effect <- tibble(
+    domain = domain_name,
+    medication = "Off",
+    estimate = coef_table$b[1],
+    se = coef_table$SE[1],
+    ci.lb = coef_table$CI.L[1],
+    ci.ub = coef_table$CI.U[1],
+    pval = coef_table$prob[1],
+    df = coef_table$dfs[1]
+  )
+  
+  # For On medication effect (intercept + med_stateOn)
+  on_effect <- tibble(
+    domain = domain_name,
+    medication = "On",
+    estimate = coef_table$b[1] + coef_table$b[2],
+    se = sqrt(coef_table$SE[1]^2 + coef_table$SE[2]^2),  # Approximate SE for sum
+    ci.lb = (coef_table$b[1] + coef_table$b[2]) - 1.96 * sqrt(coef_table$SE[1]^2 + coef_table$SE[2]^2),
+    ci.ub = (coef_table$b[1] + coef_table$b[2]) + 1.96 * sqrt(coef_table$SE[1]^2 + coef_table$SE[2]^2),
+    pval = coef_table$prob[2],  # p-value for the difference
+    df = coef_table$dfs[2]
+  )
+  
+  # Difference between On and Off
+  diff_effect <- tibble(
+    domain = domain_name,
+    medication = "Difference (On - Off)",
+    estimate = coef_table$b[2],
+    se = coef_table$SE[2],
+    ci.lb = coef_table$CI.L[2],
+    ci.ub = coef_table$CI.U[2],
+    pval = coef_table$prob[2],
+    df = coef_table$dfs[2]
+  )
+  
+  # Get heterogeneity info
+  het_info <- tibble(
+    domain = domain_name,
+    I2 = rve_obj$I2,
+    tau2 = rve_obj$tau.sq
+  )
+  
+  return(list(
+    off = off_effect,
+    on = on_effect,
+    diff = diff_effect,
+    het = het_info
+  ))
+}
+
+# Extract results for both domains
+verbal_results <- extract_rve_results(rve_results[["Verbal Fluency"]], "Verbal Fluency")
+
+# Combine for plotting
+medication_effects <- bind_rows(
+  verbal_results$off,
+  verbal_results$on,
+  verbal_results$diff
+)
+
+# -----------------------------
+# VERY LOW vs HIGH Verbal Fluency AND Cogn Fluex Extra Checks  ------------
+
+low_high_df <- final_df %>%
+  filter(
+    (condition_A == "VeryLowHz" & condition_B == "HighHz") |
+      (condition_A == "HighHz" & condition_B == "VeryLowHz")
+  )
+
+
+
+# Define a sequence of r values to test
+r_vals <- seq(0, 0.9, by = 0.1)
+
+unique(low_high_df$Main_cog_domain)
+
+#df <- low_high_df %>% filter(Main_cog_domain=="Verbal Fluency")
+df <- low_high_df %>% filter(Main_cog_domain=="Cognitive Flexibility")
+
+# Function to compute meta-analysis for a given r
+run_with_r <- function(r_val) {
+  df %>%
+    rowwise() %>%
+    mutate(
+      es = list(
+        if (design_type == "within") {
+          hedges_g_within(mean_A, mean_B, sd_A, sd_B, n_A, r_val)
+        } else {
+          hedges_g_between(mean_A, mean_B, sd_A, sd_B, n_A, n_B)
+        }
+      ),
+      yi = es$g,
+      vi = es$v,
+      yi = if_else(higher_is_better=="TRUE", yi, -yi)   # flip sign if needed
+    ) %>%
+    ungroup() %>%
+    rma.mv(
+      yi, vi,
+      random = ~ 1 | effect_id ,
+      method = "REML",
+      data = .
+    ) %>%
+    { tibble(
+      r = r_val,
+      estimate = .$beta[1],
+      se = .$se,
+      ci.lb = .$ci.lb,
+      ci.ub = .$ci.ub
+    ) }
+}
+
+# Run the sensitivity analysis across all r values
+results <- map_df(r_vals, run_with_r)
+
+
+# Plot effect size vs r
+results %>%
+  ggplot(aes(x = r, y = estimate)) +
+  ylim(-1,1.3) +
+  geom_line(color = "deepskyblue4", size = 1) +
+  geom_ribbon(aes(ymin = ci.lb, ymax = ci.ub), alpha = 0.1, fill = "deepskyblue4") +
+  geom_hline(yintercept = 0, linetype = "dashed", colour="firebrick", size=1) +
+  labs(
+    x = "\n Assumed correlation r",
+    y = "Effect size (Hedges' g) \n",
+    title = "Very Low Hz vs High Hz: [Cognitive Flexibility] \nSensitivity of effect size to assumed correlation r"
+  ) +
+  theme(axis.text.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        legend.position = "none") +
+  theme(panel.background = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        strip.background = element_blank(),
+        strip.text = element_blank(),
+        axis.line = element_blank(),
+        axis.text.x = element_text(size = 10),
+        axis.text.y = element_text(size = 10),
+        axis.title.x = element_text(size = 10, vjust = -0.5),
+        axis.title.y = element_text(size = 10, vjust = -0.5),
+        plot.margin = margin(5, 5, 5, 5, "pt")) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+
+
+
+
+
+
+
+
+# LEAVE ON OUT CV 
+
+#df <- low_high_df %>% filter(Main_cog_domain=="Verbal Fluency")
+df <- low_high_df %>% filter(Main_cog_domain=="Cognitive Flexibility")
+
+ 
+studies <- unique(df$study_name)
+
+
+loso_results <- lapply(studies, function(s) {
+  
+  res <- rma.mv(
+    yi, vi,
+    random = ~ 1 | study_name / effect_id,
+    method = "REML",
+    data = subset(df, study_name != s)
+  )
+  
+  tibble(
+    left_out = s,
+    estimate = res$beta[1],
+    se = res$se,
+    ci.lb = res$ci.lb,
+    ci.ub = res$ci.ub
+  )
+})
+
+loso_df <- bind_rows(loso_results)
+loso_df
+
+library(metafor)
+
+forest(
+  x = loso_df$estimate,
+  sei = loso_df$se,
+  slab = paste("Leave out:", loso_df$left_out),
+  xlab = "Pooled Hedges' g (Leave-One-Out)",
+  alim = c(-0.2, 0.9),
+  at = seq(-0.2, 0.9, 0.2),
+  cex = 0.8
+)
+
+
+
+
+
+
+# Filter for your two domains
+domains <- c("Verbal Fluency", "Cognitive Flexibility")
+
+domain_med_df <- low_high_df %>% 
+  filter(Main_cog_domain %in% domains)
+
+# Check medication status distribution by domain
+cat("Medication status by domain:\n")
+table(domain_med_df$Main_cog_domain, domain_med_df$med_state)
+
+cat("\nMedication status by study within domains:\n")
+print(table(domain_med_df$Main_cog_domain, domain_med_df$study_name, domain_med_df$med_state))
+
+
+
+
+
+# APPROACH 3: Robust Variance Estimation (RVE)
+
+# Run RVE models for each domain
+rve_results <- list()
+
+
+
+library(robumeta)
+
+for(d in domains) {
+  cat("\n========== RVE for ", d, " ==========\n")
+  df_domain <- domain_med_df %>% filter(Main_cog_domain == d)
+  
+  # Check if both medication states are present
+  if(length(unique(df_domain$med_state)) < 2) {
+    cat("Only one medication state present. Skipping RVE.\n")
+    next
+  }
+  
+  # Run RVE with small-sample corrections
+  res_rve <- robu(
+    yi ~ med_state,
+    data = df_domain,
+    studynum = effect_id,
+    var.eff.size = vi,
+    modelweights = "CORR",
+    rho = 0.6
+  )
+  
+  print(res_rve)
+  rve_results[[d]] <- res_rve
+}
+
+
+
+
+
+
+# CREATE COMPREHENSIVE VISUALIZATION
+
+
+# Extract results for plotting
+extract_rve_results <- function(rve_obj, domain_name) {
+  # Get the coefficient table
+  coef_table <- as.data.frame(rve_obj$reg_table)
+  
+  # For intercept (Off medication effect)
+  off_effect <- tibble(
+    domain = domain_name,
+    medication = "Off",
+    estimate = coef_table$b[1],
+    se = coef_table$SE[1],
+    ci.lb = coef_table$CI.L[1],
+    ci.ub = coef_table$CI.U[1],
+    pval = coef_table$prob[1],
+    df = coef_table$dfs[1]
+  )
+  
+  # For On medication effect (intercept + med_stateOn)
+  on_effect <- tibble(
+    domain = domain_name,
+    medication = "On",
+    estimate = coef_table$b[1] + coef_table$b[2],
+    se = sqrt(coef_table$SE[1]^2 + coef_table$SE[2]^2),  # Approximate SE for sum
+    ci.lb = (coef_table$b[1] + coef_table$b[2]) - 1.96 * sqrt(coef_table$SE[1]^2 + coef_table$SE[2]^2),
+    ci.ub = (coef_table$b[1] + coef_table$b[2]) + 1.96 * sqrt(coef_table$SE[1]^2 + coef_table$SE[2]^2),
+    pval = coef_table$prob[2],  # p-value for the difference
+    df = coef_table$dfs[2]
+  )
+  
+  # Difference between On and Off
+  diff_effect <- tibble(
+    domain = domain_name,
+    medication = "Difference (On - Off)",
+    estimate = coef_table$b[2],
+    se = coef_table$SE[2],
+    ci.lb = coef_table$CI.L[2],
+    ci.ub = coef_table$CI.U[2],
+    pval = coef_table$prob[2],
+    df = coef_table$dfs[2]
+  )
+  
+  # Get heterogeneity info
+  het_info <- tibble(
+    domain = domain_name,
+    I2 = rve_obj$I2,
+    tau2 = rve_obj$tau.sq
+  )
+  
+  return(list(
+    off = off_effect,
+    on = on_effect,
+    diff = diff_effect,
+    het = het_info
+  ))
+}
+
+# Extract results for both domains
+verbal_results <- extract_rve_results(rve_results[["Verbal Fluency"]], "Verbal Fluency")
+flex_results <- extract_rve_results(rve_results[["Cognitive Flexibility"]], "Cognitive Flexibility")
+
+# Combine for plotting
+medication_effects <- bind_rows(
+  verbal_results$off,
+  verbal_results$on,
+  verbal_results$diff,
+  flex_results$off,
+  flex_results$on,
+  flex_results$diff
+)
+
+# -----------------------------
+# LOW|VERY LOW vs high Exect Control RT vs accuracy  ------------
+
+low_high_df <- final_df %>%
+  filter(
+    (condition_A == "LowHz" & condition_B == "HighHz") |
+      (condition_A == "VeryLowHz" & condition_B == "HighHz")
+  )
+
+
+df <- low_high_df %>% filter(Main_cog_domain=="Executive Control")
+
+unique(df$Metric)
+
+df_accuracy <- df %>% filter(Metric %in% c("Accuracy", "Interference cost", "Error rate", "Error rate cost"))
+df_rt <- df %>% filter(Metric %in% c("Time", "RT cost", "RT", "Latency"))
+
+
+res_lh <- rma.mv(
+  yi, vi,
+  random = ~ 1 | study_name / effect_id ,
+  method = "REML",
+  test="t",
+  data = df_accuracy
+)
+
+summary(res_lh)
+
+
+meta::forest(
+  res_lh,
+  annotate=TRUE, addfit=TRUE, 
+  showweights=TRUE, header=TRUE,
+  slab = paste(df_accuracy$study_name, "-", df_accuracy$`Cog Task`),
+  xlab = "Hedges' g (positive = better cognitive performance for [Low|Very Low Hz])",
+  cex = 0.9,
+  col="white", border="firebrick",
+  colout="firebrick"
+)
+
+
+
+
+res_lh <- rma.mv(
+  yi, vi,
+  random = ~ 1 | study_name / effect_id ,
+  method = "REML",
+  test="t",
+  data = df_rt
+)
+
+summary(res_lh)
+
+
+
+
+meta::forest(
+  res_lh,
+  annotate=TRUE, addfit=TRUE, 
+  showweights=TRUE, header=TRUE,
+  slab = paste(df_rt$study_name, "-", df_rt$`Cog Task`),
+  xlab = "Hedges' g (positive = better cognitive performance for [Low|Very Low Hz])",
+  cex = 0.9,
+  col="white", border="firebrick",
+  colout="firebrick"
+)
+
+# --------
+
+# VERY LOW vs high Exect Control RT vs accuracy ------------
+
+low_high_df <- final_df %>%
+  filter(
+    (condition_A == "VeryLowHz" & condition_B == "HighHz") |
+      (condition_A == "HighHz" & condition_B == "VeryLowHz")
+  )
+
+
+df <- low_high_df %>% filter(Main_cog_domain=="Executive Control")
+
+unique(df$Metric)
+
+df_accuracy <- df %>% filter(Metric %in% c("Accuracy", "Interference cost", "Error rate", "Error rate cost"))
+df_rt <- df %>% filter(Metric %in% c("Time", "RT cost", "RT", "Latency"))
+
+
+res_lh <- rma.mv(
+  yi, vi,
+  random = ~ 1 | study_name / effect_id ,
+  method = "REML",
+  test="t",
+  data = df_accuracy
+)
+
+summary(res_lh)
+
+
+meta::forest(
+  res_lh,
+  annotate=TRUE, addfit=TRUE, 
+  showweights=TRUE, header=TRUE,
+  slab = paste(df_accuracy$study_name, "-", df_accuracy$`Cog Task`),
+  xlab = "Hedges' g (positive = better cognitive performance for [Very Low Hz])",
+  cex = 0.9,
+  col="white", border="firebrick",
+  colout="firebrick"
+)
+
+
+
+
+res_lh <- rma.mv(
+  yi, vi,
+  random = ~ 1 | study_name / effect_id ,
+  method = "REML",
+  test="t",
+  data = df_rt
+)
+
+summary(res_lh)
+
+
+
+
+meta::forest(
+  res_lh,
+  annotate=TRUE, addfit=TRUE, 
+  showweights=TRUE, header=TRUE,
+  slab = paste(df_rt$study_name, "-", df_rt$`Cog Task`),
+  xlab = "Hedges' g (positive = better cognitive performance for [Very Low Hz])",
+  cex = 0.9,
+  col="white", border="firebrick",
+  colout="firebrick"
+)
+
+# --------
+
+# OFF vs HIGH Data pre-processing Verbal Fluency AND Processing Speed Extra Checks  -------------------------
+
+final_df <- read_excel("LFS.HFS.toanalyse.new.xlsx", sheet = "Folha1")
+
+names(final_df)
+
+length(unique(final_df$study_name)) # 22
+
+final_df %>% select(study_name, design) %>% distinct() %>% count() # 23
+
+unique(final_df$contrast)
+
+assumed_r <- 0.5 
+
+unique(final_df$design)
+
+final_df <- final_df %>%
+  mutate(
+    design_type = if_else(
+      grepl("Within", design, ignore.case = TRUE),
+      "within",
+      "between"
+    )
+  )
+
+# Within-subject Hedges g (small sample correct SMD)
+
+hedges_g_within <- function(m1, m2, sd1, sd2, n, r) {
+  sd_diff <- sqrt(sd1^2 + sd2^2 - 2*r*sd1*sd2)
+  dz <- (m1 - m2) / sd_diff
+  J <- 1 - (3 / (4*n - 1))
+  g <- dz * J
+  var_g <- (1/n) + (g^2 / (2*n))
+  list(g = g, v = var_g)
+}
+
+
+# Between-subject Hedges g
+hedges_g_between <- function(m1, m2, sd1, sd2, n1, n2) {
+  s_pooled <- sqrt(
+    ((n1 - 1)*sd1^2 + (n2 - 1)*sd2^2) / (n1 + n2 - 2)
+  )
+  d <- (m1 - m2) / s_pooled
+  J <- 1 - (3 / (4*(n1 + n2) - 9))
+  g <- d * J
+  var_g <- (n1 + n2)/(n1*n2) + (g^2/(2*(n1 + n2)))
+  list(g = g, v = var_g)
+}
+
+
+
+final_df <- final_df %>%
+  mutate(
+    mean_A = as.numeric(mean_A),
+    mean_B = as.numeric(mean_B),
+    sd_A   = as.numeric(sd_A),
+    sd_B   = as.numeric(sd_B),
+    n_A    = as.numeric(n_A),
+    n_B    = as.numeric(n_B)
+  )
+
+
+final_df <- final_df %>%
+  rowwise() %>%
+  mutate(
+    es = list(
+      if (design_type == "within") {
+        hedges_g_within(
+          mean_A, mean_B,
+          sd_A, sd_B,
+          n_A,
+          assumed_r
+        )
+      } else {
+        hedges_g_between(
+          mean_A, mean_B,
+          sd_A, sd_B,
+          n_A, n_B
+        )
+      }
+    ),
+    yi = es$g,
+    vi = es$v
+  ) %>%
+  ungroup() %>%
+  select(-es)
+
+
+
+# SMD/hedges_g sign correction
+
+
+final_df <- final_df %>%
+  mutate(
+    yi = if_else(higher_is_better=="TRUE", yi, -yi)
+  )
+
+
+summary(final_df$yi)
+summary(final_df$vi)
+
+
+# How to treat the nested structure
+# Use study_id to treat all contrasts as independendt, study_name as dependent
+
+final_df <- final_df %>%
+  mutate(
+    study_id = as.factor(study_id),
+    effect_id = row_number()
+  )
+
+
+# final_df <- final_df %>%
+#   group_by(study_name) %>%         # group by study
+#   mutate(effect_id = row_number()) %>%  # effect_id unique within study
+#   ungroup() %>%
+#   mutate(study_name = as.factor(study_name),
+#          effect_id = as.factor(effect_id))
+
+
+#fwrite(final_df, "final_df_new.csv")
+
+
+# ----------------
+
+# OFF vs HIGH Verbal Fluency AND Processing Speed  Extra Checks  ------------
+
+off_high_df <- final_df %>%
+  filter( (condition_A == "Off" & condition_B == "HighHz") )
+
+
+
+# Define a sequence of r values to test
+r_vals <- seq(0, 0.9, by = 0.1)
+
+
+df <- off_high_df %>% filter(Main_cog_domain=="Verbal Fluency")
+#df <- off_high_df %>% filter(Main_cog_domain=="Processing Speed")
+
+# Function to compute meta-analysis for a given r
+run_with_r <- function(r_val) {
+  df %>%
+    rowwise() %>%
+    mutate(
+      es = list(
+        if (design_type == "within") {
+          hedges_g_within(mean_A, mean_B, sd_A, sd_B, n_A, r_val)
+        } else {
+          hedges_g_between(mean_A, mean_B, sd_A, sd_B, n_A, n_B)
+        }
+      ),
+      yi = es$g,
+      vi = es$v,
+      yi = if_else(higher_is_better=="TRUE", yi, -yi)   # flip sign if needed
+    ) %>%
+    ungroup() %>%
+    rma.mv(
+      yi, vi,
+      random = ~ 1 | effect_id ,
+      method = "REML",
+      data = .
+    ) %>%
+    { tibble(
+      r = r_val,
+      estimate = .$beta[1],
+      se = .$se,
+      ci.lb = .$ci.lb,
+      ci.ub = .$ci.ub
+    ) }
+}
+
+# Run the sensitivity analysis across all r values
+results <- map_df(r_vals, run_with_r)
+
+
+# Plot effect size vs r
+results %>%
+  ggplot(aes(x = r, y = estimate)) +
+  ylim(-0.5,0.5) +
+  geom_line(color = "deepskyblue4", size = 1) +
+  geom_ribbon(aes(ymin = ci.lb, ymax = ci.ub), alpha = 0.1, fill = "deepskyblue4") +
+  geom_hline(yintercept = 0, linetype = "dashed", colour="firebrick", size=1) +
+  labs(
+    x = "\n Assumed correlation r",
+    y = "Effect size (Hedges' g) \n",
+    title = "OFF vs High Hz: [Verbal Fluency] \nSensitivity of effect size to assumed correlation r"
+  ) +
+  theme(axis.text.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        legend.position = "none") +
+  theme(panel.background = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        strip.background = element_blank(),
+        strip.text = element_blank(),
+        axis.line = element_blank(),
+        axis.text.x = element_text(size = 10),
+        axis.text.y = element_text(size = 10),
+        axis.title.x = element_text(size = 10, vjust = -0.5),
+        axis.title.y = element_text(size = 10, vjust = -0.5),
+        plot.margin = margin(5, 5, 5, 5, "pt")) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+
+
+
+
+
+
+
+
+# LEAVE ON OUT CV 
+
+#df <- off_high_df %>% filter(Main_cog_domain=="Verbal Fluency")
+df <- off_high_df %>% filter(Main_cog_domain=="Processing Speed")
+
+ 
+studies <- unique(df$study_name)
+
+
+loso_results <- lapply(studies, function(s) {
+  
+  res <- rma.mv(
+    yi, vi,
+    random = ~ 1 | study_name / effect_id,
+    method = "REML",
+    data = subset(df, study_name != s)
+  )
+  
+  tibble(
+    left_out = s,
+    estimate = res$beta[1],
+    se = res$se,
+    ci.lb = res$ci.lb,
+    ci.ub = res$ci.ub
+  )
+})
+
+loso_df <- bind_rows(loso_results)
+loso_df
+
+library(metafor)
+
+forest(
+  x = loso_df$estimate,
+  sei = loso_df$se,
+  slab = paste("Leave out:", loso_df$left_out),
+  xlab = "Pooled Hedges' g (Leave-One-Out)",
+  alim = c(-2.0, 0.5),
+  at = seq(-2.0, 0.5, 0.2),
+  cex = 0.8
+)
+
+
+
+# Filter for your two domains
+domains <- c("Verbal Fluency", "Processing Speed")
+
+domain_med_df <- off_high_df %>% 
+  filter(Main_cog_domain %in% domains)
+
+# Check medication status distribution by domain
+cat("Medication status by domain:\n")
+table(domain_med_df$Main_cog_domain, domain_med_df$med_state)
+
+cat("\nMedication status by study within domains:\n")
+print(table(domain_med_df$Main_cog_domain, domain_med_df$study_name, domain_med_df$med_state))
+
+
+
+
+
+# APPROACH 3: Robust Variance Estimation (RVE)
+
+# Run RVE models for each domain
+rve_results <- list()
+
+
+
+library(robumeta)
+
+for(d in domains) {
+  cat("\n========== RVE for ", d, " ==========\n")
+  df_domain <- domain_med_df %>% filter(Main_cog_domain == d)
+  
+  # Check if both medication states are present
+  if(length(unique(df_domain$med_state)) < 2) {
+    cat("Only one medication state present. Skipping RVE.\n")
+    next
+  }
+  
+  # Run RVE with small-sample corrections
+  res_rve <- robu(
+    yi ~ med_state,
+    data = df_domain,
+    studynum = effect_id,
+    var.eff.size = vi,
+    modelweights = "CORR",
+    rho = 0.6
+  )
+  
+  print(res_rve)
+  rve_results[[d]] <- res_rve
+}
+
+
+
+
+
+
+# CREATE COMPREHENSIVE VISUALIZATION
+
+# Extract results for plotting
+extract_rve_results <- function(rve_obj, domain_name) {
+  # Get the coefficient table
+  coef_table <- as.data.frame(rve_obj$reg_table)
+  
+  # For intercept (Off medication effect)
+  off_effect <- tibble(
+    domain = domain_name,
+    medication = "Off",
+    estimate = coef_table$b[1],
+    se = coef_table$SE[1],
+    ci.lb = coef_table$CI.L[1],
+    ci.ub = coef_table$CI.U[1],
+    pval = coef_table$prob[1],
+    df = coef_table$dfs[1]
+  )
+  
+  # For On medication effect (intercept + med_stateOn)
+  on_effect <- tibble(
+    domain = domain_name,
+    medication = "On",
+    estimate = coef_table$b[1] + coef_table$b[2],
+    se = sqrt(coef_table$SE[1]^2 + coef_table$SE[2]^2),  # Approximate SE for sum
+    ci.lb = (coef_table$b[1] + coef_table$b[2]) - 1.96 * sqrt(coef_table$SE[1]^2 + coef_table$SE[2]^2),
+    ci.ub = (coef_table$b[1] + coef_table$b[2]) + 1.96 * sqrt(coef_table$SE[1]^2 + coef_table$SE[2]^2),
+    pval = coef_table$prob[2],  # p-value for the difference
+    df = coef_table$dfs[2]
+  )
+  
+  # Difference between On and Off
+  diff_effect <- tibble(
+    domain = domain_name,
+    medication = "Difference (On - Off)",
+    estimate = coef_table$b[2],
+    se = coef_table$SE[2],
+    ci.lb = coef_table$CI.L[2],
+    ci.ub = coef_table$CI.U[2],
+    pval = coef_table$prob[2],
+    df = coef_table$dfs[2]
+  )
+  
+  # Get heterogeneity info
+  het_info <- tibble(
+    domain = domain_name,
+    I2 = rve_obj$I2,
+    tau2 = rve_obj$tau.sq
+  )
+  
+  return(list(
+    off = off_effect,
+    on = on_effect,
+    diff = diff_effect,
+    het = het_info
+  ))
+}
+
+# Extract results for both domains
+verbal_results <- extract_rve_results(rve_results[["Verbal Fluency"]], "Verbal Fluency")
+speed_results <- extract_rve_results(rve_results[["Processing Speed"]], "Processing Speed")
+
+# Combine for plotting
+medication_effects <- bind_rows(
+  verbal_results$off,
+  verbal_results$on,
+  verbal_results$diff,
+  speed_results$off,
+  speed_results$on,
+  speed_results$diff
+)
+
+# -----------------------------
+# OFF vs Low|Very LOW Data pre-processing Verbal Fluency AND Executive Control Extra Checks  -------------------------
+
+final_df <- read_excel("LFS.HFS.toanalyse.new.xlsx", sheet = "Folha1")
+
+names(final_df)
+
+length(unique(final_df$study_name)) # 22
+
+final_df %>% select(study_name, design) %>% distinct() %>% count() # 23
+
+unique(final_df$contrast)
+
+assumed_r <- 0.5 
+
+unique(final_df$design)
+
+final_df <- final_df %>%
+  mutate(
+    design_type = if_else(
+      grepl("Within", design, ignore.case = TRUE),
+      "within",
+      "between"
+    )
+  )
+
+# Within-subject Hedges g (small sample correct SMD)
+
+hedges_g_within <- function(m1, m2, sd1, sd2, n, r) {
+  sd_diff <- sqrt(sd1^2 + sd2^2 - 2*r*sd1*sd2)
+  dz <- (m1 - m2) / sd_diff
+  J <- 1 - (3 / (4*n - 1))
+  g <- dz * J
+  var_g <- (1/n) + (g^2 / (2*n))
+  list(g = g, v = var_g)
+}
+
+
+# Between-subject Hedges g
+hedges_g_between <- function(m1, m2, sd1, sd2, n1, n2) {
+  s_pooled <- sqrt(
+    ((n1 - 1)*sd1^2 + (n2 - 1)*sd2^2) / (n1 + n2 - 2)
+  )
+  d <- (m1 - m2) / s_pooled
+  J <- 1 - (3 / (4*(n1 + n2) - 9))
+  g <- d * J
+  var_g <- (n1 + n2)/(n1*n2) + (g^2/(2*(n1 + n2)))
+  list(g = g, v = var_g)
+}
+
+
+
+final_df <- final_df %>%
+  mutate(
+    mean_A = as.numeric(mean_A),
+    mean_B = as.numeric(mean_B),
+    sd_A   = as.numeric(sd_A),
+    sd_B   = as.numeric(sd_B),
+    n_A    = as.numeric(n_A),
+    n_B    = as.numeric(n_B)
+  )
+
+
+final_df <- final_df %>%
+  rowwise() %>%
+  mutate(
+    es = list(
+      if (design_type == "within") {
+        hedges_g_within(
+          mean_A, mean_B,
+          sd_A, sd_B,
+          n_A,
+          assumed_r
+        )
+      } else {
+        hedges_g_between(
+          mean_A, mean_B,
+          sd_A, sd_B,
+          n_A, n_B
+        )
+      }
+    ),
+    yi = es$g,
+    vi = es$v
+  ) %>%
+  ungroup() %>%
+  select(-es)
+
+
+
+# SMD/hedges_g sign correction
+
+
+final_df <- final_df %>%
+  mutate(
+    yi = if_else(higher_is_better=="TRUE", yi, -yi)
+  )
+
+
+summary(final_df$yi)
+summary(final_df$vi)
+
+
+# How to treat the nested structure
+# Use study_id to treat all contrasts as independendt, study_name as dependent
+
+final_df <- final_df %>%
+  mutate(
+    study_id = as.factor(study_id),
+    effect_id = row_number()
+  )
+
+
+# final_df <- final_df %>%
+#   group_by(study_name) %>%         # group by study
+#   mutate(effect_id = row_number()) %>%  # effect_id unique within study
+#   ungroup() %>%
+#   mutate(study_name = as.factor(study_name),
+#          effect_id = as.factor(effect_id))
+
+
+#fwrite(final_df, "final_df_new.csv")
+
+
+# ----------------
+
+# OFF vs Low|Very Low Verbal Fluency AND Executive Control Extra Checks  ------------
+
+off_low_df <- final_df %>%
+  filter( (condition_A == "Off" & condition_B == "LowHz") | (condition_A == "Off" & condition_B == "VeryLowHz")  )
+
+
+
+# Define a sequence of r values to test
+r_vals <- seq(0, 0.9, by = 0.1)
+
+
+df <- off_low_df %>% filter(Main_cog_domain=="Verbal Fluency")
+df <- off_low_df %>% filter(Main_cog_domain=="Executive Control")
+
+# Function to compute meta-analysis for a given r
+run_with_r <- function(r_val) {
+  df %>%
+    rowwise() %>%
+    mutate(
+      es = list(
+        if (design_type == "within") {
+          hedges_g_within(mean_A, mean_B, sd_A, sd_B, n_A, r_val)
+        } else {
+          hedges_g_between(mean_A, mean_B, sd_A, sd_B, n_A, n_B)
+        }
+      ),
+      yi = es$g,
+      vi = es$v,
+      yi = if_else(higher_is_better=="TRUE", yi, -yi)   # flip sign if needed
+    ) %>%
+    ungroup() %>%
+    rma.mv(
+      yi, vi,
+      random = ~ 1 | effect_id ,
+      method = "REML",
+      data = .
+    ) %>%
+    { tibble(
+      r = r_val,
+      estimate = .$beta[1],
+      se = .$se,
+      ci.lb = .$ci.lb,
+      ci.ub = .$ci.ub
+    ) }
+}
+
+# Run the sensitivity analysis across all r values
+results <- map_df(r_vals, run_with_r)
+
+
+# Plot effect size vs r
+results %>%
+  ggplot(aes(x = r, y = estimate)) +
+  ylim(-1.5,0.0) +
+  geom_line(color = "deepskyblue4", size = 1) +
+  geom_ribbon(aes(ymin = ci.lb, ymax = ci.ub), alpha = 0.1, fill = "deepskyblue4") +
+  geom_hline(yintercept = 0, linetype = "dashed", colour="firebrick", size=1) +
+  labs(
+    x = "\n Assumed correlation r",
+    y = "Effect size (Hedges' g) \n",
+    title = "OFF vs Low|Very Low Hz: [Executive Control] \nSensitivity of effect size to assumed correlation r"
+  ) +
+  theme(axis.text.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        legend.position = "none") +
+  theme(panel.background = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        strip.background = element_blank(),
+        strip.text = element_blank(),
+        axis.line = element_blank(),
+        axis.text.x = element_text(size = 10),
+        axis.text.y = element_text(size = 10),
+        axis.title.x = element_text(size = 10, vjust = -0.5),
+        axis.title.y = element_text(size = 10, vjust = -0.5),
+        plot.margin = margin(5, 5, 5, 5, "pt")) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+
+
+
+
+
+
+
+
+# LEAVE ON OUT CV 
+
+
+#df <- off_low_df %>% filter(Main_cog_domain=="Verbal Fluency")
+df <- off_low_df %>% filter(Main_cog_domain=="Executive Control")
+
+ 
+studies <- unique(df$study_name)
+
+
+loso_results <- lapply(studies, function(s) {
+  
+  res <- rma.mv(
+    yi, vi,
+    random = ~ 1 | study_name / effect_id,
+    method = "REML",
+    data = subset(df, study_name != s)
+  )
+  
+  tibble(
+    left_out = s,
+    estimate = res$beta[1],
+    se = res$se,
+    ci.lb = res$ci.lb,
+    ci.ub = res$ci.ub
+  )
+})
+
+loso_df <- bind_rows(loso_results)
+loso_df
+
+library(metafor)
+
+forest(
+  x = loso_df$estimate,
+  sei = loso_df$se,
+  slab = paste("Leave out:", loso_df$left_out),
+  xlab = "Pooled Hedges' g (Leave-One-Out)",
+  alim = c(-1.0, 0.2),
+  at = seq(-1.0, 0.2, 0.2),
+  cex = 0.8
+)
+
+
+
+# Filter for your two domains
+domains <- c("Verbal Fluency", "Executive Control")
+
+domain_med_df <- off_low_df %>% 
+  filter(Main_cog_domain %in% domains)
+
+# Check medication status distribution by domain
+cat("Medication status by domain:\n")
+table(domain_med_df$Main_cog_domain, domain_med_df$med_state)
+
+cat("\nMedication status by study within domains:\n")
+print(table(domain_med_df$Main_cog_domain, domain_med_df$study_name, domain_med_df$med_state))
+
+
+
+
+
+# APPROACH 3: Robust Variance Estimation (RVE)
+
+# Run RVE models for each domain
+rve_results <- list()
+
+
+
+library(robumeta)
+
+for(d in domains) {
+  cat("\n========== RVE for ", d, " ==========\n")
+  df_domain <- domain_med_df %>% filter(Main_cog_domain == d)
+  
+  # Check if both medication states are present
+  if(length(unique(df_domain$med_state)) < 2) {
+    cat("Only one medication state present. Skipping RVE.\n")
+    next
+  }
+  
+  # Run RVE with small-sample corrections
+  res_rve <- robu(
+    yi ~ med_state,
+    data = df_domain,
+    studynum = effect_id,
+    var.eff.size = vi,
+    modelweights = "CORR",
+    rho = 0.6
+  )
+  
+  print(res_rve)
+  rve_results[[d]] <- res_rve
+}
+
+
+
+
+
+
+# CREATE COMPREHENSIVE VISUALIZATION
+
+# Extract results for plotting
+extract_rve_results <- function(rve_obj, domain_name) {
+  # Get the coefficient table
+  coef_table <- as.data.frame(rve_obj$reg_table)
+  
+  # For intercept (Off medication effect)
+  off_effect <- tibble(
+    domain = domain_name,
+    medication = "Off",
+    estimate = coef_table$b[1],
+    se = coef_table$SE[1],
+    ci.lb = coef_table$CI.L[1],
+    ci.ub = coef_table$CI.U[1],
+    pval = coef_table$prob[1],
+    df = coef_table$dfs[1]
+  )
+  
+  # For On medication effect (intercept + med_stateOn)
+  on_effect <- tibble(
+    domain = domain_name,
+    medication = "On",
+    estimate = coef_table$b[1] + coef_table$b[2],
+    se = sqrt(coef_table$SE[1]^2 + coef_table$SE[2]^2),  # Approximate SE for sum
+    ci.lb = (coef_table$b[1] + coef_table$b[2]) - 1.96 * sqrt(coef_table$SE[1]^2 + coef_table$SE[2]^2),
+    ci.ub = (coef_table$b[1] + coef_table$b[2]) + 1.96 * sqrt(coef_table$SE[1]^2 + coef_table$SE[2]^2),
+    pval = coef_table$prob[2],  # p-value for the difference
+    df = coef_table$dfs[2]
+  )
+  
+  # Difference between On and Off
+  diff_effect <- tibble(
+    domain = domain_name,
+    medication = "Difference (On - Off)",
+    estimate = coef_table$b[2],
+    se = coef_table$SE[2],
+    ci.lb = coef_table$CI.L[2],
+    ci.ub = coef_table$CI.U[2],
+    pval = coef_table$prob[2],
+    df = coef_table$dfs[2]
+  )
+  
+  # Get heterogeneity info
+  het_info <- tibble(
+    domain = domain_name,
+    I2 = rve_obj$I2,
+    tau2 = rve_obj$tau.sq
+  )
+  
+  return(list(
+    off = off_effect,
+    on = on_effect,
+    diff = diff_effect,
+    het = het_info
+  ))
+}
+
+# Extract results for both domains
+verbal_results <- extract_rve_results(rve_results[["Verbal Fluency"]], "Verbal Fluency")
+speed_results <- extract_rve_results(rve_results[["Executive Control"]], "Executive Control")
+
+# Combine for plotting
+medication_effects <- bind_rows(
+  verbal_results$off,
+  verbal_results$on,
+  verbal_results$diff,
+  speed_results$off,
+  speed_results$on,
+  speed_results$diff
+)
+
+# -----------------------------
+# OFF vs LOW Executive Control  ------------
+
+
+off_low_df <- final_df %>%
+  filter( (condition_A == "Off" & condition_B == "LowHz")  )
+
+
+# Identify domains with at least 2 effect sizes
+domain_counts <- table(off_low_df$Main_cog_domain)
+valid_domains <- names(domain_counts[domain_counts >= 2])
+
+# Create empty list to store results
+domain_results <- list()
+forest_plots <- list()
+
+for(d in valid_domains){
+  
+  df <- off_low_df %>% filter(Main_cog_domain == d)
+  
+  # Run multilevel meta-analysis
+  res <- rma.mv(
+    yi = yi,
+    V = vi,
+    random = ~1 | study_name /  effect_id ,
+    method = "REML",
+    data = df
+  )
+  
+  # Store results
+  domain_results[[d]] <- tibble(
+    domain = d,
+    estimate = res$beta[1],
+    se = res$se,
+    ci.lb = res$ci.lb,
+    ci.ub = res$ci.ub,
+    pval = res$pval
+  )
+  
+  # Create forest plot
+  forest(res,
+         slab = paste(df$study_name, "-", df$`Cog Task`),
+         xlab = "Hedges' g (positive = better cognitive performance for [OFF])",
+         main = paste("\n Forest plot:", d),
+         annotate=TRUE, addfit=TRUE, 
+         showweights=TRUE, header=TRUE,
+         cex = 0.9,
+         col="white", border="firebrick",
+         colout="firebrick")
+  
+  forest_plots[[d]] <- res
+}
+
+
+
+
+# -----------------------------
+# OFF vs LowLOW Data pre-processing Executive Control Extra Checks  -------------------------
+
+final_df <- read_excel("LFS.HFS.toanalyse.new.xlsx", sheet = "Folha1")
+
+names(final_df)
+
+length(unique(final_df$study_name)) # 22
+
+final_df %>% select(study_name, design) %>% distinct() %>% count() # 23
+
+unique(final_df$contrast)
+
+assumed_r <- 0.5 
+
+unique(final_df$design)
+
+final_df <- final_df %>%
+  mutate(
+    design_type = if_else(
+      grepl("Within", design, ignore.case = TRUE),
+      "within",
+      "between"
+    )
+  )
+
+# Within-subject Hedges g (small sample correct SMD)
+
+hedges_g_within <- function(m1, m2, sd1, sd2, n, r) {
+  sd_diff <- sqrt(sd1^2 + sd2^2 - 2*r*sd1*sd2)
+  dz <- (m1 - m2) / sd_diff
+  J <- 1 - (3 / (4*n - 1))
+  g <- dz * J
+  var_g <- (1/n) + (g^2 / (2*n))
+  list(g = g, v = var_g)
+}
+
+
+# Between-subject Hedges g
+hedges_g_between <- function(m1, m2, sd1, sd2, n1, n2) {
+  s_pooled <- sqrt(
+    ((n1 - 1)*sd1^2 + (n2 - 1)*sd2^2) / (n1 + n2 - 2)
+  )
+  d <- (m1 - m2) / s_pooled
+  J <- 1 - (3 / (4*(n1 + n2) - 9))
+  g <- d * J
+  var_g <- (n1 + n2)/(n1*n2) + (g^2/(2*(n1 + n2)))
+  list(g = g, v = var_g)
+}
+
+
+
+final_df <- final_df %>%
+  mutate(
+    mean_A = as.numeric(mean_A),
+    mean_B = as.numeric(mean_B),
+    sd_A   = as.numeric(sd_A),
+    sd_B   = as.numeric(sd_B),
+    n_A    = as.numeric(n_A),
+    n_B    = as.numeric(n_B)
+  )
+
+
+final_df <- final_df %>%
+  rowwise() %>%
+  mutate(
+    es = list(
+      if (design_type == "within") {
+        hedges_g_within(
+          mean_A, mean_B,
+          sd_A, sd_B,
+          n_A,
+          assumed_r
+        )
+      } else {
+        hedges_g_between(
+          mean_A, mean_B,
+          sd_A, sd_B,
+          n_A, n_B
+        )
+      }
+    ),
+    yi = es$g,
+    vi = es$v
+  ) %>%
+  ungroup() %>%
+  select(-es)
+
+
+
+# SMD/hedges_g sign correction
+
+
+final_df <- final_df %>%
+  mutate(
+    yi = if_else(higher_is_better=="TRUE", yi, -yi)
+  )
+
+
+summary(final_df$yi)
+summary(final_df$vi)
+
+
+# How to treat the nested structure
+# Use study_id to treat all contrasts as independendt, study_name as dependent
+
+final_df <- final_df %>%
+  mutate(
+    study_id = as.factor(study_id),
+    effect_id = row_number()
+  )
+
+
+# final_df <- final_df %>%
+#   group_by(study_name) %>%         # group by study
+#   mutate(effect_id = row_number()) %>%  # effect_id unique within study
+#   ungroup() %>%
+#   mutate(study_name = as.factor(study_name),
+#          effect_id = as.factor(effect_id))
+
+
+#fwrite(final_df, "final_df_new.csv")
+
+
+# ----------------
+
+# OFF vs Low Low Executive Control Extra Checks  ------------
+
+
+off_low_df <- final_df %>%
+  filter( (condition_A == "Off" & condition_B == "LowHz")  )
+
+
+# Define a sequence of r values to test
+r_vals <- seq(0, 0.9, by = 0.1)
+
+df <- off_low_df %>% filter(Main_cog_domain=="Executive Control")
+
+# Function to compute meta-analysis for a given r
+run_with_r <- function(r_val) {
+  df %>%
+    rowwise() %>%
+    mutate(
+      es = list(
+        if (design_type == "within") {
+          hedges_g_within(mean_A, mean_B, sd_A, sd_B, n_A, r_val)
+        } else {
+          hedges_g_between(mean_A, mean_B, sd_A, sd_B, n_A, n_B)
+        }
+      ),
+      yi = es$g,
+      vi = es$v,
+      yi = if_else(higher_is_better=="TRUE", yi, -yi)   # flip sign if needed
+    ) %>%
+    ungroup() %>%
+    rma.mv(
+      yi, vi,
+      random = ~ 1 | study_name / effect_id ,
+      method = "REML",
+      data = .
+    ) %>%
+    { tibble(
+      r = r_val,
+      estimate = .$beta[1],
+      se = .$se,
+      ci.lb = .$ci.lb,
+      ci.ub = .$ci.ub
+    ) }
+}
+
+# Run the sensitivity analysis across all r values
+results <- map_df(r_vals, run_with_r)
+
+
+# Plot effect size vs r
+results %>%
+  ggplot(aes(x = r, y = estimate)) +
+  ylim(-1.0,0.3) +
+  geom_line(color = "deepskyblue4", size = 1) +
+  geom_ribbon(aes(ymin = ci.lb, ymax = ci.ub), alpha = 0.1, fill = "deepskyblue4") +
+  geom_hline(yintercept = 0, linetype = "dashed", colour="firebrick", size=1) +
+  labs(
+    x = "\n Assumed correlation r",
+    y = "Effect size (Hedges' g) \n",
+    title = "OFF vs Low Hz: [Executive Control] \nSensitivity of effect size to assumed correlation r"
+  ) +
+  theme(axis.text.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        legend.position = "none") +
+  theme(panel.background = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        strip.background = element_blank(),
+        strip.text = element_blank(),
+        axis.line = element_blank(),
+        axis.text.x = element_text(size = 10),
+        axis.text.y = element_text(size = 10),
+        axis.title.x = element_text(size = 10, vjust = -0.5),
+        axis.title.y = element_text(size = 10, vjust = -0.5),
+        plot.margin = margin(5, 5, 5, 5, "pt")) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+
+
+
+
+
+
+
+# -----------------------------
+# LOW|VERY LOW vs high Exect Control RT vs accuracy  ------------
+
+off_low_df <- final_df %>%
+  filter( (condition_A == "Off" & condition_B == "LowHz") | (condition_A == "Off" & condition_B == "VeryLowHz")  )
+
+
+df <- off_low_df %>% filter(Main_cog_domain=="Executive Control")
+
+unique(df$Metric)
+
+df_accuracy <- df %>% filter(Metric %in% c("Accuracy", "Interference cost", "Error rate", "Error rate cost"))
+df_rt <- df %>% filter(Metric %in% c("Time", "RT cost", "RT", "Latency"))
+
+
+res_lh <- rma.mv(
+  yi, vi,
+  random = ~ 1 | study_name / effect_id ,
+  method = "REML",
+  test="t",
+  data = df_accuracy
+)
+
+summary(res_lh)
+
+
+meta::forest(
+  res_lh,
+  annotate=TRUE, addfit=TRUE, 
+  showweights=TRUE, header=TRUE,
+  slab = paste(df_accuracy$study_name, "-", df_accuracy$`Cog Task`),
+  xlab = "Hedges' g (positive = better cognitive performance for [Low|Very Low Hz])",
+  cex = 0.9,
+  col="white", border="firebrick",
+  colout="firebrick"
+)
+
+
+
+
+res_lh <- rma.mv(
+  yi, vi,
+  random = ~ 1 | study_name / effect_id ,
+  method = "REML",
+  test="t",
+  data = df_rt
+)
+
+summary(res_lh)
+
+
+
+
+meta::forest(
+  res_lh,
+  annotate=TRUE, addfit=TRUE, 
+  showweights=TRUE, header=TRUE,
+  slab = paste(df_rt$study_name, "-", df_rt$`Cog Task`),
+  xlab = "Hedges' g (positive = better cognitive performance for [Low|Very Low Hz])",
+  cex = 0.9,
+  col="white", border="firebrick",
+  colout="firebrick"
+)
+
+# --------
